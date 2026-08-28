@@ -1,0 +1,33 @@
+
+
+
+FORMATION2
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   │
+│   ├── database.py
+│   │
+│   ├── books/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── schemas.py
+│   │   └── routes.py
+│   │
+│   └── auth/
+│       ├── __init__.py
+│       ├── models.py
+│       ├── schemas.py
+│       ├── routes.py
+│       └── security.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── test_books.py
+│   ├── test_auth.py
+│   └── conftest.py
+│
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
