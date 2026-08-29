@@ -7,7 +7,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 
-
+print(" -------------------------------------------------------")
+print("DATABASE DRIVER:", settings.DATABASE_URL.split("://")[0])
+print(" -------------------------------------------------------")
 async_engine = create_async_engine(
     url=settings.DATABASE_URL,
     echo=True,
