@@ -2,38 +2,41 @@ from pathlib import Path
 import base64
 import json
 import os
-
+from app.core.config import settings
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-PRIVATE_KEY_PATH = BASE_DIR / "keys" / "private_key.pem"
-PUBLIC_KEY_PATH = BASE_DIR / "keys" / "public_key.pem"
-
-
-# ============================================================
-# Chargement des clés RSA
-# ============================================================
-
-with open(PRIVATE_KEY_PATH, "rb") as f:
-    PRIVATE_KEY = serialization.load_pem_private_key(
-        f.read(),
-        password=None
-    )
+BASE_DIR = Path(__file__).resolve().parents[2] 
+PRIVATE_KEY_PATH = BASE_DIR / "keys" / "private_key.pem" 
+PUBLIC_KEY_PATH = BASE_DIR / "keys" / "public_key.pem" 
 
 
-with open(PUBLIC_KEY_PATH, "rb") as f:
-    PUBLIC_KEY = serialization.load_pem_public_key(
-        f.read()
-    )
+if not settings.DEBUG: 
+    # ================================================ 
+    # # PRODUCTION → Railway 
+    # # ================================================
+    PRIVATE_KEY = os.getenv("PRIVATE_KEY", "") 
+    PUBLIC_KEY = os.getenv("PUBLIC_KEY", "") 
+    if not PRIVATE_KEY: 
+        raise ValueError( "PRIVATE_KEY must be set in production." ) 
+    if not PUBLIC_KEY: 
+        raise ValueError( "PUBLIC_KEY must be set in production." )
 
+    # Railway peut contenir \n sous forme de texte
+    PRIVATE_KEY = PRIVATE_KEY.replace("\\n", "\n") 
+    PUBLIC_KEY = PUBLIC_KEY.replace("\\n", "\n")
 
-# ============================================================
-# RSA-OAEP
-# ============================================================
+else: 
+    # ================================================ 
+    # # LOCAL → fichiers PEM 
+    # # ================================================
+    with open(PRIVATE_KEY_PATH, "rb") as f: 
+        PRIVATE_KEY = f.read()
+    with open(PUBLIC_KEY_PATH, "rb") as f: 
+        PUBLIC_KEY = f.read()
+
 
 def decrypt_rsa(encrypted_key: str) -> bytes:
 

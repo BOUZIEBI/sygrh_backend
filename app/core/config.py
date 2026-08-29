@@ -25,7 +25,9 @@ class Settings:
             "APP_NAME",
             "edutel API",
         )
-
+        print(" ------------- DEBUG ---------------")
+        print(os.getenv("DEBUG"))
+        print(" ------------- DEBUG ---------------")
         self.DEBUG = _as_bool(
             os.getenv("DEBUG"),
             False,

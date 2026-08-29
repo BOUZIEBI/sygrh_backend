@@ -9,6 +9,7 @@ crypto_router = APIRouter()
 @crypto_router.get("/public-key")
 async def get_public_key():
 
+
     public_key = PUBLIC_KEY.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
