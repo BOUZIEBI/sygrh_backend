@@ -8,7 +8,7 @@ from app.core.login_limiter import login_limiter
 from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 from app.core.config import settings
-from app.core.database import get_db
+from app.db.main import get_session
 from app.core.jwt import create_access_token, create_refresh_token, decode_refresh_token
 from app.core.security import hash_password, validate_password_strength, verify_password
 from app.auth.dependencies import get_current_active_user
@@ -35,7 +35,7 @@ auth_router = APIRouter()
     response_model=MessageResponse_[UserResponse],
     status_code=status.HTTP_201_CREATED,
 )
-async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(user: UserCreate, db: AsyncSession = Depends(get_session)):
     
     try:
         validate_password_strength(user.password)
@@ -63,7 +63,7 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @auth_router.post("/login", response_model=TokenResponse)
-async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_session)):
 
     # IP du client
     client_ip = request.client.host
@@ -152,7 +152,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     response_model=MessageResponse_[UserResponse],
     status_code=status.HTTP_201_CREATED,
 )
-async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSession = Depends(get_db)):
+async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSession = Depends(get_session)):
     
     nouvel_utilisateur=await affecter_permissions(db, user_data.user_uid, user_data.permissions)
 
@@ -166,7 +166,7 @@ async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSe
 @auth_router.get("/me", response_model=MessageResponse_[UserResponse])
 async def getUser(
     current_user=Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_session)
 ):
     
     user_recharge=await recharger_user(session=db, user_uid=current_user.uid)
@@ -180,7 +180,7 @@ async def getUser(
 
 
 @auth_router.post("/refresh", response_model=TokenResponse)
-def refresh_tokens(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+def refresh_tokens(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_session)):
     try:
         decoded = decode_refresh_token(payload.refresh_token)
         user_id = UUID(decoded.get("sub"))
@@ -226,7 +226,7 @@ def refresh_tokens(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_
 def logout(
     payload: LogoutRequest,
     current_user=Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ):
     if payload.all_devices:
         count = revoke_all_auth_sessions(db, current_user.uid)
@@ -252,7 +252,7 @@ def logout(
 
 
 @auth_router.post("/request-password-reset", response_model=MessageResponse)
-async def request_password_reset(payload: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+async def request_password_reset(payload: PasswordResetRequest, db: AsyncSession = Depends(get_session)):
     user = get_user_by_email(db, payload.email)
     debug_token = None
 
@@ -279,7 +279,7 @@ async def request_password_reset(payload: PasswordResetRequest, db: AsyncSession
 
 
 @auth_router.post("/reset-password", response_model=MessageResponse)
-def reset_password(payload: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
+def reset_password(payload: PasswordResetConfirm, db: AsyncSession = Depends(get_session)):
     try:
         validate_password_strength(payload.new_password)
         

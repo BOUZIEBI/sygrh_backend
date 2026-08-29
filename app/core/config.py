@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-#load_dotenv()
+load_dotenv()
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -46,16 +46,24 @@ class Settings:
         # SQLAlchemy AsyncEngine nécessite :
         # postgresql+asyncpg://...
 
-        if self.DATABASE_URL.startswith("postgresql://"):
+        if self.DATABASE_URL.startswith("postgresql+psycopg://"):
+
+            self.DATABASE_URL = self.DATABASE_URL.replace(
+                "postgresql+psycopg://",
+                "postgresql+asyncpg://",
+                1,
+            )
+
+        elif self.DATABASE_URL.startswith("postgresql://"):
+
             self.DATABASE_URL = self.DATABASE_URL.replace(
                 "postgresql://",
                 "postgresql+asyncpg://",
                 1,
             )
-
-        # --------------------------------------------------
-        # SECURITY
-        # --------------------------------------------------
+            # --------------------------------------------------
+            # SECURITY
+            # --------------------------------------------------
 
         self.SECRET_KEY = os.getenv(
             "SECRET_KEY",
@@ -63,34 +71,34 @@ class Settings:
         ).strip()
 
         self.JWT_SECRET_KEY = os.getenv(
-            "JWT_SECRET_KEY",
-            "",
+                "JWT_SECRET_KEY",
+                "",
         ).strip()
 
         self.JWT_ALGORITHM = os.getenv(
-            "JWT_ALGORITHM",
-            "HS256",
+                "JWT_ALGORITHM",
+                "HS256",
         )
 
         self.ACCESS_TOKEN_EXPIRE_MINUTES = int(
-            os.getenv(
-                "ACCESS_TOKEN_EXPIRE_MINUTES",
-                "30",
-            )
+                os.getenv(
+                    "ACCESS_TOKEN_EXPIRE_MINUTES",
+                    "30",
+                )
         )
 
         self.REFRESH_TOKEN_EXPIRE_DAYS = int(
-            os.getenv(
-                "REFRESH_TOKEN_EXPIRE_DAYS",
-                "7",
-            )
+                os.getenv(
+                    "REFRESH_TOKEN_EXPIRE_DAYS",
+                    "7",
+                )
         )
 
         self.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(
-            os.getenv(
-                "PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
-                "10",
-            )
+                os.getenv(
+                    "PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
+                    "10",
+                )
         )
 
         # --------------------------------------------------
@@ -253,6 +261,7 @@ class Settings:
                 raise ValueError(
                     "Default SECRET_KEY cannot be used in production."
                 )
+
 
 
 settings = Settings()

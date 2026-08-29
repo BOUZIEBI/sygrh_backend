@@ -4,8 +4,6 @@ uvicorn[standard]==0.52.0
 sqlmodel==0.0.39
 SQLAlchemy==2.0.51
 asyncpg==0.31.0
-psycopg==3.3.4
-psycopg-binary==3.3.4
 alembic==1.19.1
 
 pydantic==2.13.4
