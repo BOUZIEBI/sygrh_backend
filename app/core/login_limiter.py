@@ -9,10 +9,11 @@ class LoginLimiter:
     BLOCK_SECONDS = 900  # 15 minutes
 
     def __init__(self):
-        self.redis = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=settings.REDIS_DB,
+        if not settings.REDIS_URL:
+            raise ValueError("REDIS_URL n'est pas définie.")
+
+        self.redis = redis.Redis.from_url(
+            settings.REDIS_URL,
             decode_responses=True,
         )
 
@@ -35,7 +36,7 @@ class LoginLimiter:
 
     async def register_failed_attempt(
         self,
-        identifier: str
+        identifier: str,
     ) -> int:
         """
         Enregistre une tentative de connexion échouée.
@@ -50,16 +51,15 @@ class LoginLimiter:
         if attempts == 1:
             await self.redis.expire(
                 attempt_key,
-                self.BLOCK_SECONDS
+                self.BLOCK_SECONDS,
             )
 
         # Limite atteinte
         if attempts >= self.MAX_ATTEMPTS:
-
             await self.redis.set(
                 block_key,
                 "1",
-                ex=self.BLOCK_SECONDS
+                ex=self.BLOCK_SECONDS,
             )
 
         return attempts
@@ -72,7 +72,7 @@ class LoginLimiter:
 
         await self.redis.delete(
             f"login:attempts:{identifier}",
-            f"login:block:{identifier}"
+            f"login:block:{identifier}",
         )
 
     async def get_attempts(self, identifier: str) -> int:
@@ -91,3 +91,4 @@ class LoginLimiter:
 
 
 login_limiter = LoginLimiter()
+
