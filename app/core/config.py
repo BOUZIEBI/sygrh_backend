@@ -40,11 +40,7 @@ class Settings:
             "",
         ).strip()
 
-        # Railway peut fournir :
-        # postgresql://...
-        #
-        # SQLAlchemy AsyncEngine nécessite :
-        # postgresql+asyncpg://...
+
 
         if self.DATABASE_URL.startswith("postgresql+psycopg://"):
 
