@@ -25,9 +25,7 @@ class Settings:
             "APP_NAME",
             "edutel API",
         )
-        print(" ------------- DEBUG ---------------")
-        print(os.getenv("DEBUG"))
-        print(" ------------- DEBUG ---------------")
+     
         self.DEBUG = _as_bool(
             os.getenv("DEBUG"),
             False,
@@ -237,6 +235,15 @@ class Settings:
             "REDIS_URL",
             "",
         ).strip()
+
+        # En local, si REDIS_URL n'est pas définie, 
+        # # on construit automatiquement l'URL Docker. 
+        if self.DEBUG and not self.REDIS_URL: 
+            self.REDIS_URL = ( 
+                f"redis://{self.REDIS_HOST}:" 
+                f"{self.REDIS_PORT}/" 
+                f"{self.REDIS_DB}" 
+            )
 
     def validate(self) -> None:
 
