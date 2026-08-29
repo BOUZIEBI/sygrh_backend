@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from app.core.config import settings
 import os
 from app.auth.routes import auth_router
-from app.eleve.routes import eleve_router
 from app.structure.routes import structure_router
 from app.type_structure.routes import typstructure_router
 from app.nationalite.routes import nationalite_router
@@ -60,7 +59,6 @@ version_prefix =f"/api/{version}"
 
 app.include_router(typeagent_router, prefix=f"{version_prefix}/typeagent", tags=["typeagent"])
 app.include_router(auth_router, prefix=f"{version_prefix}/auth", tags=["auth"])
-app.include_router(eleve_router, prefix=f"{version_prefix}/eleve", tags=["eleve"])
 app.include_router(naturepieceidentite_router, prefix=f"{version_prefix}/nature-piece-identite", tags=["naturepieceidentite"])
 app.include_router(genre_router, prefix=f"{version_prefix}/genre", tags=["genre"])
 app.include_router(nationalite_router, prefix=f"{version_prefix}/nationalite", tags=["nationalite"])
