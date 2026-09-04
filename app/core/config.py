@@ -235,6 +235,30 @@ class Settings:
             "REDIS_URL",
             "",
         ).strip()
+        
+        # --------------------------------------------------
+        # RAILWAY
+        # --------------------------------------------------
+        self.RAILWAY_ENDPOINT_URL = os.getenv(
+            "RAILWAY_ENDPOINT_URL",     
+            ""
+        ).strip()
+        self.RAILWAY_REGION = os.getenv(
+            "RAILWAY_REGION",
+            "auto"
+        ).strip()
+        self.RAILWAY_ACCESS_KEY_ID = os.getenv(
+            "RAILWAY_ACCESS_KEY_ID",
+            ""
+        ).strip()
+        self.RAILWAY_SECRET_ACCESS_KEY = os.getenv(
+            "RAILWAY_SECRET_ACCESS_KEY",
+            ""
+        ).strip()
+        self.RAILWAY_BUCKET_NAME = os.getenv(
+            "RAILWAY_BUCKET_NAME",
+            ""
+        ).strip()
 
         # En local, si REDIS_URL n'est pas définie, 
         # # on construit automatiquement l'URL Docker. 

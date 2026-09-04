@@ -16,7 +16,6 @@ class TypeDocumentJustificatif(SQLModel, table=True):
     libelle: str | None = Field(default=None,max_length=255,nullable=True)
     code: str | None = Field(default=None,max_length=50,nullable=True)
     cree_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
-    modifie_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
     cree_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
     modifie_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
     supprime_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)

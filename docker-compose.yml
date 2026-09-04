@@ -17,7 +17,7 @@ services:
     depends_on:
       - postgres
     environment: 
-      DATABASE_URL: postgresql+psycopg://formateur2_user:postgres@postgres:5432/formation2_db
+      DATABASE_URL: postgresql+asyncpg://formateur2_user:postgres@postgres:5432/formation2_db
     networks:
       - fastapi_network
 

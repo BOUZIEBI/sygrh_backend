@@ -55,13 +55,6 @@ if database_url.startswith("postgresql://"):
     )
 
 
-# DEBUG
-print("------------------------------------")
-print("ALEMBIC DATABASE DRIVER :",
-      database_url.split("://")[0])
-print("------------------------------------")
-
-
 config.set_main_option(
     "sqlalchemy.url",
     database_url,

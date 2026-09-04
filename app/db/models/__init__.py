@@ -11,9 +11,17 @@ from app.db.models.nature_piece_identite import NaturePieceidentite
 from app.db.models.statut import Statut
 from app.db.models.classe_situation_administrative import ClasseSituationAdministrative
 from app.db.models.type_emploi import TypeEmploi
+from app.db.models.typeinformationcontact import TypeInformationContact
+from app.db.models.informationcontact import InformationContact
 from app.db.models.nationalite import Nationalite
 from app.db.models.nature_acte_nomination_dans_emploi import NatureActeNominationDansEmploi
 from app.db.models.emploi import Emploi
+from app.db.models.categorie_actualite import CategorieActualite
+from app.db.models.actualite import Actualite
+from app.db.models.communique import Communique
+from app.db.models.statut_service import StatutService
+from app.db.models.categorie_phototheque import CategoriePhototheque
+from app.db.models.phototheque import Phototheque
 from app.db.models.statut_situation_administrative import StatutSituationAdministrative
 from app.db.models.echelon import Echelon
 from app.db.models.groupe_emploi import GroupeEmploi
@@ -21,6 +29,9 @@ from app.db.models.categorie import Categorie
 from app.db.models.grade import Grade
 from app.db.models.fonction import Fonction
 from app.db.models.type_agent import TypeAgent
+from app.db.models.type_message import TypeMessage
+from app.db.models.statut_message import StatutMessage
+from app.db.models.message import Message
 from app.db.models.validation_fiche import ValidationFiche
 from app.db.models.statut_agent import StatutAgente
 from app.db.models.pays import Pays
@@ -37,6 +48,7 @@ from app.db.models.role import Role
 
 from app.db.models.type_structure import TypeStructure
 from app.db.models.structure import Structure
+from app.db.models.service import Service
 from app.db.models.groupe import Groupe
 from app.db.models.parcours import Parcours
 from app.db.models.niveau import Niveau

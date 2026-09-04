@@ -22,6 +22,5 @@ class Promotion(SQLModel, table=True):
     modifie_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
     supprime_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
     is_mode: bool | None = Field(default=None,nullable=True)
-    modifie_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
     supprime_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
 

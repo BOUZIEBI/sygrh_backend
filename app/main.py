@@ -16,13 +16,19 @@ from app.statut.routes import statut_router
 from app.fichevalidation.routes import fichevalidation_router
 from app.nature_acte_nomination_fonctionactuelle.routes import nature_acte_nomination_fonctionactuelle_router
 from app.agent.routes import agent_router
+from app.communique.routes import communique_router 
+from app.actualite.routes import actualite_router
 from app.crypto.routes import crypto_router
 from app.redis.routes import redis_router
+from app.nosservices import *
+from app.phototheque import phototheque_router
+from app.message import message_router
 from fastapi.exceptions import RequestValidationError
 from app.core.exception_handlers import validation_exception_handler
 from app.core.exception_handlers import metier_exception_handler
 from app.core.exceptions import http_exception_handler
 from app.core.exceptions_metier import RaiseException
+
 
 
 version = os.getenv("APP_VERSION", "")
@@ -74,6 +80,13 @@ app.include_router(nature_acte_nomination_fonctionactuelle_router, prefix=f"{ver
 app.include_router(agent_router, prefix=f"{version_prefix}/agent", tags=["agent"])
 app.include_router(crypto_router, prefix=f"{version_prefix}/crypto", tags=["crypto"])
 app.include_router(redis_router, prefix=f"{version_prefix}/redis", tags=["crypto"])
+app.include_router(communique_router, prefix=f"{version_prefix}/communique", tags=["communique"])
+app.include_router(actualite_router, prefix=f"{version_prefix}/actualite", tags=["actualite"])
+app.include_router(service_router, prefix=f"{version_prefix}/service", tags=["service"])
+app.include_router(phototheque_router, prefix=f"{version_prefix}/phototheque", tags=["phototheque"])
+app.include_router(message_router, prefix=f"{version_prefix}/message", tags=["message"])
+
+
 
 
 @app.get("/")

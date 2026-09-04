@@ -5,13 +5,11 @@ from sqlalchemy import Column, DateTime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-
 if TYPE_CHECKING:
-    from app.db.models.situation_administrative import SituationAdministrative
+    from app.db.models.actualite import Actualite
 
-
-class Echelon(SQLModel, table=True):
-    __tablename__ = "echelons"
+class CategorieActualite(SQLModel, table=True):
+    __tablename__ = "categorie_actualites"
     uid: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
@@ -21,16 +19,10 @@ class Echelon(SQLModel, table=True):
     code: str | None = Field(default=None,max_length=50,nullable=True)
     cree_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
     modifie_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
-    cree_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
-    modifie_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
-    supprime_par: UUID | None = Field(default=None,foreign_key="users.uid",nullable=True,index=True,)
     is_mode: bool | None = Field(default=None,nullable=True)
     supprime_le: datetime | None = Field(default=None,sa_column=Column(DateTime(timezone=True),nullable=True))
 
-
-    situation_administratives_echelon: Optional["SituationAdministrative"] = Relationship(
-        back_populates="echelon",
-            sa_relationship_kwargs={
-                "foreign_keys": "[SituationAdministrative.echelon_uid]"
-            }
+    actualites: list["Actualite"] = Relationship(
+        back_populates="categorie_actualite"
     )
+

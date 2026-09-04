@@ -14,7 +14,12 @@ if TYPE_CHECKING:
     from app.db.models.permission import Permission
     from app.db.models.structure import Structure
     from app.db.models.agent import Agent
+    from app.db.models.communique import Communique
+    from app.db.models.actualite import Actualite
+    from app.db.models.service import Service
+    from app.db.models.phototheque import Phototheque
     
+
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -134,11 +139,90 @@ class User(SQLModel, table=True):
             "foreign_keys": "Agent.supprime_par_uid",
         }
     )
+    
+    communiques_crees: list["Communique"] = Relationship(
+        back_populates="cree_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Communique.cree_par_uid",
+        }
+    )
+    communiques_modifies: list["Communique"] = Relationship(
+        back_populates="modifie_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Communique.modifie_par_uid",
+        }
+    )
+    communiques_supprimes: list["Communique"] = Relationship(
+        back_populates="supprime_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Communique.supprime_par_uid",
+        }
+    )
+    
+    actualites_crees: list["Actualite"] = Relationship(
+        back_populates="cree_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Actualite.cree_par_uid",
+        }
+    )
+    actualites_modifies: list["Actualite"] = Relationship(
+        back_populates="modifie_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Actualite.modifie_par_uid",
+        }
+    )
+    actualites_supprimes: list["Actualite"] = Relationship(
+        back_populates="supprime_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Actualite.supprime_par_uid",
+        }
+    )
+    
+    services_crees: list["Service"] = Relationship(
+        back_populates="cree_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Service.cree_par_uid",
+        }
+    )
+    services_modifies: list["Service"] = Relationship(
+        back_populates="modifie_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Service.modifie_par_uid",
+        }
+    )
+    services_supprimes: list["Service"] = Relationship(
+        back_populates="supprime_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Service.supprime_par_uid",
+        }
+    )
+    
+    phototheques_crees: list["Phototheque"] = Relationship(
+        back_populates="cree_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Phototheque.cree_par_uid",
+        }
+    )
+    phototheques_modifies: list["Phototheque"] = Relationship(
+        back_populates="modifie_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Phototheque.modifie_par_uid",
+        }
+    )
+    phototheques_supprimes: list["Phototheque"] = Relationship(
+        back_populates="supprime_par",
+        sa_relationship_kwargs={
+            "foreign_keys": "Phototheque.supprime_par_uid",
+        }
+    )    
+    
 
     permissions: list["Permission"] = Relationship(
         back_populates="users",
         link_model=UserPermission
     )
+    
+    
 
     
 

@@ -1,0 +1,1 @@
+from app.nosservices.routes import service_router

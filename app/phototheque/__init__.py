@@ -1,0 +1,1 @@
+from app.phototheque.routes import phototheque_router
