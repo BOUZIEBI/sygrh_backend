@@ -67,7 +67,7 @@ async def initialize_crypto_session(
 @crypto_router.post(
     "/public-key",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(verify_csrf_token)],
+    #dependencies=[Depends(verify_csrf_token)],
 )
 async def register_public_key(
     request: Request,

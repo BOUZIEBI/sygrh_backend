@@ -44,7 +44,7 @@ def set_csrf_cookie(
         max_age=CSRF_TOKEN_MAX_AGE,
         expires=CSRF_TOKEN_MAX_AGE,
         path="/",
-        secure=settings.is_production,
+        secure=settings.DEBUG ,
         httponly=False,
         samesite="none" if settings.is_production else "lax",
     )
