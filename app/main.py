@@ -46,6 +46,7 @@ app = FastAPI(
     }
 )
 
+origins: list[str] = []
 
 if settings.DEBUG:
     origins = [
@@ -70,21 +71,13 @@ else:
             "en production."
         )
 
-    origins = [
-        str(settings.FRONTEND_URL)
-        .rstrip("/")
-    ]
+    origins.append(settings.FRONTEND_URL)
 
-# Supprimer les valeurs vides et les doublons
-origins = list(
-    dict.fromkeys(
-        origin
-        for origin in origins
-        if origin
-    )
-)
+# Suppression des valeurs vides et des doublons
+origins = list(dict.fromkeys(origins))
 
 
+"""
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -103,6 +96,22 @@ app.add_middleware(
         "X-CSRF-Token",
         "X-Crypto-Session-ID",
     ],
+)
+"""
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-CSRF-Token",
+        "X-Crypto-Session-ID",
+    ],
+    max_age=600,
 )
 
 
