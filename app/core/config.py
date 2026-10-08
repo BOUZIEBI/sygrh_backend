@@ -143,8 +143,24 @@ class Settings:
 
         self.FRONTEND_URL = os.getenv(
             "FRONTEND_URL",
-            "http://localhost:3000",
+            "",
         ).strip()
+        
+        self.COOKIE_SECURE = _as_bool(
+            os.getenv("COOKIE_SECURE"),
+            default=not self.DEBUG,
+        )
+        
+        self.COOKIE_SAMESITE = os.getenv(
+            "COOKIE_SAMESITE",
+            "lax",
+        ).strip().lower()
+
+        if self.COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+            raise ValueError(
+                "COOKIE_SAMESITE must be 'lax', 'strict' or 'none'."
+            )
+        
 
         # --------------------------------------------------
         # SMTP
@@ -259,6 +275,22 @@ class Settings:
             "RAILWAY_BUCKET_NAME",
             ""
         ).strip()
+        self.ENVIRONMENT = os.getenv(
+            "ENVIRONMENT",
+            ""
+        ).strip()
+        
+        # --------------------------------------------------
+        # GEMINI
+        # --------------------------------------------------
+        self.GEMINI_API_KEY = os.getenv(
+            "GEMINI_API_KEY",
+            ""
+        ).strip()
+        self.GEMMA_MODEL = os.getenv(
+            "GEMMA_MODEL",
+            ""
+        ).strip()
 
         # En local, si REDIS_URL n'est pas définie, 
         # # on construit automatiquement l'URL Docker. 
@@ -290,6 +322,10 @@ class Settings:
                 raise ValueError(
                     "Default SECRET_KEY cannot be used in production."
                 )
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
 
 
 

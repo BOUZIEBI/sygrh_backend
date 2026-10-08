@@ -1,6 +1,6 @@
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Request, Depends, status, File, Form, UploadFile
+from fastapi import APIRouter, Header, HTTPException, Request, Depends, status, File, Form, UploadFile
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.actualite.services import ActualiteService
 from app.db.main import get_session
@@ -8,25 +8,49 @@ from starlette.concurrency import run_in_threadpool
 from app.core.railway_bucket import RailwayBucketService
 from typing import List, Annotated
 from app.auth.dependencies import get_current_active_user, require_permission
-from app.actualite.schemas import ActualiteCreateModel, ActualiteUpdateModel, ActualiteResponse, MessageResponse, MessageAllResponse
+from app.actualite.schemas import MessageAllResponse, ActualiteCreateModel, ActualiteUpdateModel, ActualiteResponse, MessageResponse, MessageAllResponse
 from app.core.exceptions_metier import RaiseException
+from app.crypto.schemas import EncryptedResponse
+
 
 
 actualite_router = APIRouter()
 actualite_service = ActualiteService()
 railway_bucket_service=RailwayBucketService()
 
-@actualite_router.get("/all",status_code=status.HTTP_200_OK, response_model=MessageAllResponse[ActualiteResponse])
+@actualite_router.get("/all",status_code=status.HTTP_200_OK, response_model=EncryptedResponse)
 async def get_all_actualites(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
 )->dict:
     actualites = await actualite_service.get_all_actualites(session)
-    return MessageAllResponse(
+    
+    actualites_data = []
+    for actualite in actualites:
+        actualite_data = ActualiteResponse.model_validate(
+            actualite
+        ).model_dump()
+
+        if actualite.fichier_key:
+            actualite_data["fichier_url"] = (
+                railway_bucket_service.generer_url_signee(
+                    fichier_key=actualite.fichier_key,
+                    expiration=3600,
+                )
+            )
+        else:
+            actualite_data["fichier_url"] = None
+
+        actualites_data.append(actualite_data)
+    
+    response_data = MessageAllResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Actualités trouvées avec succès",
-        data=actualites
+        data=actualites_data
     )
+    encrypt_data_actualite=await actualite_service.encrypt_actualite_response(response_data, crypto_session_id)
+    return encrypt_data_actualite
 
 
 @actualite_router.post("/",status_code=status.HTTP_201_CREATED,response_model=MessageResponse[ActualiteResponse])
@@ -106,8 +130,9 @@ async def create_une_actualite(
     )
 
 
-@actualite_router.get("/{actualite_uid}",status_code=status.HTTP_200_OK,response_model=MessageResponse[ActualiteResponse])
+@actualite_router.get("/{actualite_uid}",status_code=status.HTTP_200_OK, response_model=EncryptedResponse)
 async def get_une_actualite(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     actualite_uid: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> dict:
@@ -121,13 +146,42 @@ async def get_une_actualite(
                     "actualite_uid": "Aucune actualité ne correspond à cet identifiant."
                 }
             ) 
+            
+            
+    if actualite_trouve.fichier_key:
+        
+        fichier_url = (
+            railway_bucket_service
+            .generer_url_signee(
+                fichier_key=(
+                    actualite_trouve.fichier_key
+                ),
+                expiration=3600,
+            )
+        )
+        
+        
+    actualite_data = (
+        ActualiteResponse.model_validate(
+            actualite_trouve
+        ).model_copy(
+            update={
+                "fichier_url": fichier_url,
+            }
+        )
+    )
     
-    return MessageResponse(
+    response_data = MessageResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Actualité trouvée avec succès",
-        data=actualite_trouve
+        data=actualite_data
     )
+    
+    encrypt_data_actualite=await actualite_service.encrypt_actualite_response(response_data, crypto_session_id)
+    return encrypt_data_actualite
+    
+    
 
 
 

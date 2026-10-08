@@ -17,6 +17,12 @@ from uuid import UUID
 from datetime import date, datetime, UTC, timezone
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from app.core.redis import redis_client
+from app.crypto.schemas import EncryptedResponse
+from app.crypto.services import encrypt_response_for_react
+from app.crypto.session_redis_store import SessionRedisStore
+
+crypto_session_store = SessionRedisStore(redis_client)
 
 
 
@@ -96,6 +102,7 @@ async def recharger_user(
         .where(User.uid == user_uid)
         .options(
             selectinload(User.role),
+            selectinload(User.agent),
             selectinload(User.permissions),
         )
     )
@@ -283,32 +290,48 @@ def generate_session_id() -> str:
     return uuid4().hex
 
 
-def create_auth_session(db: AsyncSession, user_id: int, session_id: str, refresh_token: str, expires_in_days: int) -> AuthSession:
+async def create_auth_session(db: AsyncSession, user_id: int, session_id: str, refresh_token: str, expires_in_days: int) -> AuthSession:
     expires_at = utcnow() + timedelta(days=expires_in_days)
     session = AuthSession(
         uid=session_id,
         user_uid=user_id,
         refresh_token_hash=hash_token(refresh_token),
-        expires_at=expires_at,
+        #expires_at=expires_at,
     )
     db.add(session)
-    db.commit()
-    db.refresh(session)
+    await db.commit()
+    await db.refresh(session)
     return session
 
 
-def get_auth_session(db: AsyncSession, session_id: str) -> AuthSession | None:
-    return db.query(AuthSession).filter(AuthSession.uid == session_id).first()
+async def get_auth_session_dev(db: AsyncSession, session_id: str) -> AuthSession | None:
+    statement = select(AuthSession).where(
+        AuthSession.uid == session_id
+    )
+
+    result =  await db.execute(statement)
+    return result.scalar_one_or_none()
 
 
-def validate_refresh_session(db: AsyncSession, session_id: str, refresh_token: str) -> AuthSession | None:
-    session = get_auth_session(db, session_id)
+async def get_auth_session(db: AsyncSession, refresh_token_hash: str) -> AuthSession | None:
+    
+    statement = select(AuthSession).where(
+        AuthSession.refresh_token_hash == refresh_token_hash 
+    )
+
+    result =  await db.execute(statement)
+    return result.scalar_one_or_none()
+
+
+async def validate_refresh_session(db: AsyncSession, session_id: str, refresh_token: str) -> AuthSession | None:
+   
+    session = await get_auth_session(db, hash_token(refresh_token))
     
     if session is None:
         return None
     
-    if session.is_revoked or _is_expired(session.expires_at):
-        return None
+    #if session.is_revoked :
+    #    return None
 
     if session.refresh_token_hash != hash_token(refresh_token):
         # Token reuse/tampering attempt: revoke all sessions for that user.
@@ -318,8 +341,8 @@ def validate_refresh_session(db: AsyncSession, session_id: str, refresh_token: s
     return session
 
 
-def revoke_auth_session(db: AsyncSession, session_id: str, replaced_by_session_id: str | None = None) -> bool:
-    session = get_auth_session(db, session_id)
+async def revoke_auth_session(db: AsyncSession, session_id: str, replaced_by_session_id: str | None = None) -> bool:
+    session = await get_auth_session(db, session_id)
     if session is None:
         return False
 
@@ -327,24 +350,41 @@ def revoke_auth_session(db: AsyncSession, session_id: str, replaced_by_session_i
     session.revoked_at = utcnow()
     if replaced_by_session_id:
         session.replaced_by_session_id = replaced_by_session_id
-    db.commit()
+    await db.commit()
     return True
 
 
-def revoke_all_auth_sessions(db: AsyncSession, user_id: int) -> int:
-    sessions = db.query(AuthSession).filter(
+async def revoke_all_auth_sessions(db: AsyncSession, user_id: int) -> int:
+    statement = select(AuthSession).where(
         AuthSession.user_uid == user_id,
         AuthSession.is_revoked.is_(False),
-    ).all()
-    now = utcnow()
-    for session in sessions:
-        session.is_revoked = True
-        session.revoked_at = now
-    db.commit()
+    )
+
+    result = await db.execute(statement)
+
+    sessions = list(
+        result.scalars().all()
+    )
+
+    if not sessions:
+        return 0
+
+    now = datetime.now(UTC)
+
+    for auth_session in sessions:
+        auth_session.is_revoked = True
+        auth_session.revoked_at = now
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    
     return len(sessions)
 
 
-def rotate_refresh_session(
+async def rotate_refresh_session(
     db: AsyncSession,
     current_session: AuthSession,
     new_session_id: str,
@@ -361,8 +401,8 @@ def rotate_refresh_session(
         expires_at=utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
+    await db.commit()
+    await db.refresh(new_session)
     return new_session
 
 
@@ -532,3 +572,58 @@ async def assign_permission_to_user(
     await session.refresh(user_permission)
 
     return user_permission
+
+
+
+
+async def encrypt_auth_response(
+    data: object,
+    crypto_session_id: str,
+) -> dict[str, str]:
+
+    try:
+        session_uid = UUID(crypto_session_id)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_CRYPTO_SESSION",
+                "message": "L'identifiant de session cryptographique est invalide.",
+            },
+        ) from error
+
+    client_public_key = await crypto_session_store.get_client_public_key(
+        session_uid
+    )
+            
+
+    if client_public_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={
+                "code": "CLIENT_PUBLIC_KEY_REQUIRED",
+                "message": (
+                    "La clé publique RSA de React est absente "
+                    "ou la session cryptographique a expiré."
+                ),
+            },
+        )
+
+    try:
+        
+        data_encrypted=encrypt_response_for_react(
+            data=data,
+            client_public_key_pem=client_public_key,
+        )
+    
+        return data_encrypted
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "RESPONSE_ENCRYPTION_FAILED",
+                "message": str(error),
+            },
+        ) from error
+    
+

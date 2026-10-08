@@ -158,10 +158,9 @@ class RailwayBucketService:
         return object_key
     
 
-
     def generer_url_signee(
         self,
-        object_key: str,
+        fichier_key: str,
         expiration: int = 3600,
     ) -> str:
         try:
@@ -169,7 +168,7 @@ class RailwayBucketService:
                 ClientMethod="get_object",
                 Params={
                     "Bucket": self.bucket,
-                    "Key": object_key,
+                    "Key": fichier_key,
                 },
                 ExpiresIn=expiration,
             )
@@ -179,6 +178,8 @@ class RailwayBucketService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Impossible de générer l’URL du fichier.",
             ) from exception
+            
+            
 
     def supprimer_fichier(self, object_key: str) -> None:
         try:

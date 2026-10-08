@@ -1,5 +1,5 @@
 from typing import List, Annotated
-from fastapi import APIRouter, HTTPException, Request, Depends, status, File, Form, UploadFile
+from fastapi import APIRouter, Header, HTTPException, Request, Depends, status, File, Form, UploadFile
 from uuid import UUID
 from datetime import datetime
 from starlette.concurrency import run_in_threadpool
@@ -10,26 +10,106 @@ from app.db.main import get_session
 from app.auth.dependencies import get_current_active_user, require_permission
 from app.communique.schemas import CommuniqueCreateModel, CommuniqueUpdateModel, CommuniqueResponse, MessageResponse, MessageAllResponse
 from app.core.exceptions_metier import RaiseException
+from app.core.redis import redis_client
+from app.crypto.schemas import EncryptedResponse
+from app.crypto.services import encrypt_response_for_react
+from app.crypto.session_redis_store import SessionRedisStore
 
 
 communique_router = APIRouter()
 communique_service = CommuniqueService()
 railway_bucket_service=RailwayBucketService()
+crypto_session_store = SessionRedisStore(redis_client)
 
-@communique_router.get("/all",status_code=status.HTTP_200_OK, response_model=MessageAllResponse[CommuniqueResponse])
+
+async def encrypt_communique_response(
+    data: object,
+    crypto_session_id: str,
+) -> dict[str, str]:
+   
+    try:
+        session_uid = UUID(crypto_session_id)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_CRYPTO_SESSION",
+                "message": "L'identifiant de session cryptographique est invalide.",
+            },
+        ) from error
+
+    client_public_key = await crypto_session_store.get_client_public_key(
+        session_uid
+    )
+            
+ 
+    if client_public_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={
+                "code": "CLIENT_PUBLIC_KEY_REQUIRED",
+                "message": (
+                    "La clé publique RSA de React est absente "
+                    "ou la session cryptographique a expiré."
+                ),
+            },
+        )
+
+    try:
+        
+        data_encrypted=encrypt_response_for_react(
+            data=data,
+            client_public_key_pem=client_public_key,
+        )
+       
+        return data_encrypted
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "RESPONSE_ENCRYPTION_FAILED",
+                "message": str(error),
+            },
+        ) from error
+        
+        
+
+@communique_router.get("/all",status_code=status.HTTP_200_OK, response_model=EncryptedResponse)
 async def get_all_communiques(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
 )->dict:
     communiques = await communique_service.get_all_communiques(session)
-    return MessageAllResponse(
+    
+    communiques_data = []
+    for communique in communiques:
+        communique_data = CommuniqueResponse.model_validate(
+            communique
+        ).model_dump()
+    
+        if communique.fichier_key:
+            communique_data["fichier_url"] = (
+                railway_bucket_service.generer_url_signee(
+                    fichier_key=communique.fichier_key,
+                    expiration=3600,
+                )
+            )
+        else:
+            communique_data["fichier_url"] = None
+    
+        communiques_data.append(communique_data)
+        
+    response_data = MessageAllResponse(
         code=status.HTTP_200_OK,
         success=True, 
         message="Communiqués trouvés avec succès",
-        data=communiques
+        data=communiques_data
     )
+    encrypt_data_communique=await encrypt_communique_response(response_data, crypto_session_id)
+    return encrypt_data_communique
 
 
-@communique_router.post("/",status_code=status.HTTP_201_CREATED,response_model=MessageResponse[CommuniqueResponse])
+@communique_router.post("/",status_code=status.HTTP_201_CREATED,response_model=EncryptedResponse)
 async def create_un_communique(
     request: Request,
     fichier: Annotated[
@@ -60,7 +140,7 @@ async def create_un_communique(
         str,
         Form(min_length=3, max_length=255),
     ],
-        
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_active_user),
     user_verifie=Depends(require_permission("CREERCOMMUNIQUE"))
@@ -117,17 +197,19 @@ async def create_un_communique(
 
         raise
 
-    return MessageResponse(
+    response_data = MessageResponse(
         code=status.HTTP_201_CREATED,
         success=True,
         message="Photothèque créée avec succès.",
         data=nouvelle_phototheque,
     )
+    return await encrypt_communique_response(response_data, crypto_session_id)
 
 
-@communique_router.get("/{communique_uid}",status_code=status.HTTP_200_OK,response_model=MessageResponse[CommuniqueResponse])
+@communique_router.get("/{communique_uid}",status_code=status.HTTP_200_OK,response_model=EncryptedResponse)
 async def get_un_communique(
     communique_uid: UUID,
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session)
 ) -> dict:
     communique_trouve = await communique_service.get_communique(communique_uid, session)
@@ -141,18 +223,23 @@ async def get_un_communique(
                 }
             ) 
     
-    return MessageResponse(
+    response_data = MessageResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Communiqué trouvé avec succès",
         data=communique_trouve
     )
+    return await encrypt_communique_response(response_data, crypto_session_id)
 
 
 
-@communique_router.patch("/{communique_uid}",status_code=status.HTTP_200_OK,response_model=MessageResponse[CommuniqueResponse])
+@communique_router.patch("/{communique_uid}",status_code=status.HTTP_200_OK,
+                        #response_model=EncryptedResponse
+                        response_model=MessageResponse[CommuniqueResponse]
+)
 async def update_un_communique(
     communique_uid: UUID,
+    #crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     fichier: Annotated[
         UploadFile | None,
         File(description="Nouveau fichier du communiqué"),
@@ -288,52 +375,56 @@ async def update_un_communique(
             # parce que l’ancien fichier n’a pas pu être supprimé.
             pass
 
-    return MessageResponse(
+    return  MessageResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Communiqué modifié avec succès.",
         data=communique_modifie,
-    )    
+    )
+    #return await encrypt_communique_response(response_data, crypto_session_id)
 
 
 @communique_router.delete(
     "/{communique_uid}", 
     status_code=status.HTTP_201_CREATED, 
-    response_model=MessageResponse[CommuniqueResponse]
+    response_model=EncryptedResponse
 )
 async def delete_communique(
     communique_uid: UUID,
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_active_user),
     user_verifie=Depends(require_permission("SUPPRIMERCOMMUNIQUE"))
 )->dict:
     communique_to_delete = await communique_service.delete_communique(communique_uid, current_user.uid, session)
-    return MessageResponse(
+    response_data = MessageResponse(
         code=status.HTTP_201_CREATED,
         success=True,
         message="Communiqué supprimé avec succès",
         data=communique_to_delete
     )
+    return await encrypt_communique_response(response_data, crypto_session_id)
 
 @communique_router.get(
     "/restaurer/{communique_uid}", 
     status_code=status.HTTP_201_CREATED, 
-    response_model=MessageResponse[CommuniqueResponse]
+    response_model=EncryptedResponse
 )
 async def restore_communique(
     communique_uid: UUID,
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_active_user),
     user_verifie=Depends(require_permission("SUPPRIMERCOMMUNIQUE"))
 )->dict:
     communique_to_restore = await communique_service.restore_communique(communique_uid, current_user.uid, session)
-    return MessageResponse(
+    response_data = MessageResponse(
         code=status.HTTP_201_CREATED,
         success=True,
         message="Communiqué restauré avec succès",
         data=communique_to_restore
     )
+    return await encrypt_communique_response(response_data, crypto_session_id)
  
-
 
 

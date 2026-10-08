@@ -17,6 +17,12 @@ from slugify import slugify
 from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from typing import TYPE_CHECKING, Optional
+from app.core.redis import redis_client
+
+from sqlalchemy.exc import (
+    IntegrityError,
+    SQLAlchemyError,
+)
 
 
 
@@ -134,12 +140,27 @@ class CommuniqueService:
         
         try:
             session.add(communique)
+
+            # Envoyer les modifications à PostgreSQL
+            # avant le commit.
+            await session.flush()
+
             await session.commit()
-            await session.refresh(communique)
-    
-        except Exception:
+
+        except IntegrityError as error:
             await session.rollback()
-            raise
+
+            raise ValueError(
+                "Un communiqué avec ces informations "
+                "existe déjà."
+            ) from error
+
+        except SQLAlchemyError as error:
+            await session.rollback()
+
+            raise RuntimeError(
+                "Impossible de modifier le communiqué."
+            ) from error
     
         communique_recharge = (
             await self.recharger_communique(

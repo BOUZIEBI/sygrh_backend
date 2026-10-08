@@ -1,0 +1,1 @@
+from app.departement.routes import departement_router

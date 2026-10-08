@@ -9,20 +9,72 @@ T = TypeVar("T")
 
 
 class RoleResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )
     uid: UUID
     libelle: str
     code: str
+    
+    
+class AgentResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )
+    uid: UUID
+    nom: str
+    prenoms: str
+
+    matricule: str | None = None
+    code: str | None = None
+    date_naissance: datetime | None = None
+    lieu_naissance: str | None = None
+    telephone_principal: str | None = None
+    telephone_secondaire: str | None = None
+    email_professionnel: str | None = None
+    email_personnel: str | None = None
+    quartier: str | None = None
+    nom_jeune_fille: str | None = None
+    lieu_habitation: str | None = None
+    date_recrutement: datetime | None = None
+    date_depart: datetime | None = None
+    nombre_enfant: int 
+    nom_prenoms_pere: str | None = None
+    nom_prenoms_mere: str | None = None
+    numero_piece_identite: str | None = None
+            
+    
 
 class PermissionResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )
     uid: UUID
     libelle: str
     code: str
+    
 
 class MessageResponse_(BaseModel, Generic[T]):
     code: int
     success: bool
     message: str
     data: T | None = None
+    
+    
+class LogoutResponse(BaseModel):
+    code: int
+    success: bool
+    message: str
+
+    
+class MessageLogoutResponse(BaseModel):
+    code: int
+    success: bool
+    message: str
+   
 
 class PermissionModel(BaseModel):
     uid: uuid.UUID
@@ -41,6 +93,7 @@ class UserResponse(BaseModel):
     is_superuser: bool
 
     role: RoleResponse | None = None
+    agent: AgentResponse | None = None
     permissions: list[PermissionResponse] = Field(
         default_factory=list
     )
@@ -51,6 +104,10 @@ class UserResponse(BaseModel):
         validation_alias="modifier_le"
     )
 
+class LoginPayload(BaseModel):
+    username: str = Field(max_length=40)
+    password: str = Field(min_length=6)
+   
 
 class UserCreateModel(BaseModel):
     email: str = Field(max_length=40)
@@ -66,15 +123,18 @@ class AffectationPermissionCreate(BaseModel):
     permissions: list[PermissionModel] = Field(default_factory=list)
 
 class UserModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True) 
     uid: uuid.UUID
     email: EmailStr
     is_verified: bool
     password_hash: str = Field(exclude=True)
     cree_le: datetime
-    modifie_le: datetime
+   
+   
+    
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
     password: str = Field(min_length=6)
     role_uid: UUID | None = None
     # AJOUT : Liste d'UUID pour les permissions (par défaut une liste vide)
@@ -107,6 +167,21 @@ class UserCreate(BaseModel):
         return value
 
 
+class LoginRequest(BaseModel):
+    username: EmailStr = Field(
+        ...,
+        description="Adresse email de l'utilisateur",
+        examples=["utilisateur@example.com"],
+    )
+
+    password: str = Field(
+        ...,
+        min_length=6,
+        max_length=128,
+        description="Mot de passe de l'utilisateur",
+        examples=["MotDePasse@2026"],
+    )
+
 class UserLoginModel(BaseModel):
     email: str = Field(max_length=40)
     password: str = Field(min_length=6)
@@ -124,11 +199,14 @@ class PasswordResetConfirmModel(BaseModel):
     new_password: str
     confirm_new_password: str
 
-class TokenResponse(BaseModel):
+class TokenResponse(BaseModel, Generic[T]):
+    code:int
+    success:bool
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    data: T | None = None 
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
@@ -159,4 +237,55 @@ class MessageResponse(BaseModel):
 class LogoutReauest(BaseModel):
     refresh_token: Optional[str]=None
     all_devices:bool=False
+    
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr
+
+
+class AuthenticatedUser(BaseModel):
+    uid: UUID
+    email: EmailStr
+
+
+class LoginData(BaseModel):
+    expires_in: int
+    # Présents uniquement en développement
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str | None = None
+
+
+class LoginResponse(BaseModel):
+    code: int
+    success: bool
+    message: str
+    data: LoginData | None
+    
+class ErrorLoginResponse(BaseModel):
+    code: int
+    success: bool
+    message: str
+    remaining:int
+    data: LoginData | None
+    
+class AuthDependenciesResponse(BaseModel):
+    code: int
+    success: bool
+    message: str
+    user: UserModel | None = None
+    is_access_token: bool
+    
+    
+class LoginRequestData(BaseModel):
+    username: str = Field(
+        min_length=3,
+        max_length=255,
+    )
+    password: str = Field(
+        min_length=1,
+    )
+    
+    
+    
 

@@ -45,7 +45,7 @@ from app.db.models.typedocumentjustificatif import TypeDocumentJustificatif
 from app.db.models.documentjustificatif import DocumentJustificatif
 from app.db.models.positionmilitaire import PositionMilitaire
 from app.db.models.role import Role
-
+from app.db.models.client_public_key import ClientPublicKey
 from app.db.models.type_structure import TypeStructure
 from app.db.models.structure import Structure
 from app.db.models.service import Service
@@ -67,4 +67,5 @@ from app.db.models.eleve import Eleve
 from app.db.models.conjoint import Conjoint
 from app.db.models.situation_administrative import SituationAdministrative 
 from app.db.models.agent import Agent
+from app.db.models.visiteur_session import VisiteurSession
 

@@ -24,7 +24,7 @@ class AgentCreateModel(BaseModel):
     lieu_habitation: str | None = None
     date_recrutement: datetime | None = None
     date_depart: datetime | None = None
-    nombre_enfant: int = Field(default=0)
+    nombre_enfant: int | None = None
     nom_prenoms_pere: str | None = None
     nom_prenoms_mere: str | None = None
     numero_piece_identite: str | None = None
@@ -32,9 +32,9 @@ class AgentCreateModel(BaseModel):
     modifie_le: datetime | None = None 
     preinscrit_le: datetime | None = None 
     etat_handicap: bool | None = None
-    is_mode: bool = Field(default=True)
-    is_deleted: bool = Field(default=False)
-    est_preinscrit: bool = Field(default=False)
+    is_mode: bool | None = None
+    is_deleted: bool | None = None
+    est_preinscrit: bool | None = None
     supprime_le: datetime | None = None
     date_premiere_prise_service_dans_structure: datetime | None = None   
   
@@ -91,9 +91,9 @@ class AgentCreateModel(BaseModel):
     statut_uid: UUID | None = None
     validation_fiche_uid: UUID | None = None
     role_uid: UUID | None = None
-    permissions: list[PermissionModel] = Field(default_factory=list)
+    permissions: list[PermissionModel] | None = Field(default_factory=list)
     
-    @field_validator( "nom","prenoms","matricule", mode="before")
+    @field_validator( "nom","prenoms", mode="before")
     @classmethod
     def validate_champ_strength(
         cls,
@@ -112,6 +112,9 @@ class AgentCreateModel(BaseModel):
     
 
 class ConjointCreateModel(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     nom_conjoint: str | None = None
     prenoms_conjoint: str | None = None
     profession_conjoint: str | None = None
@@ -119,6 +122,9 @@ class ConjointCreateModel(BaseModel):
 
 
 class SituationAdministrativeCreateModel(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     numero_acte_nomination_dans_emploi: str | None = None 
     date_signature_acte_nomination_dans_emploi: datetime | None = None
     date_premiere_prise_service_fonction_publique: datetime | None = None
@@ -151,6 +157,9 @@ class SituationAdministrativeCreateModel(BaseModel):
 
 
 class Agent(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     uid: uuid.UUID
     nom: str = Field(max_length=255,nullable=False)
     prenoms: str | None = Field(max_length=255,nullable=False)
@@ -308,6 +317,9 @@ class AgentUpdateModel(BaseModel):
 
     
 class RoleResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     uid: UUID
     libelle: str
     code: str
@@ -334,12 +346,18 @@ class StructureResponse(BaseModel):
     typestructure: TypeStructureResponse | None = None
 
 class RoleResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     uid: UUID
     libelle: str
     code: str
 
 
 class PermissionResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
     uid: UUID
     libelle: str
     code: str
@@ -368,6 +386,7 @@ class ConjointResponse(BaseModel):
     is_mode: bool | None = None
     modifie_le: datetime | None = None
     supprime_le: datetime | None = None
+
 
 class SituationAdministrativeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

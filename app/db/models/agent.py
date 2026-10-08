@@ -62,13 +62,6 @@ class Agent(SQLModel, table=True):
             nullable=True
         )
     )
-    cree_le: datetime | None = Field(
-        default=None,
-        sa_column=Column(
-            DateTime(timezone=True),
-            nullable=True
-        )
-    )
     modifie_le: datetime | None = Field(
         default=None,
         sa_column=Column(

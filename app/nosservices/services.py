@@ -15,7 +15,6 @@ from app.nosservices.schemas import (
     MessageResponse,
     MessageAllResponse,
 )
-
 from app.core.exceptions_metier import RaiseException
 from app.core.generer_code import CodeGenerator
 from app.db.models.service import Service
@@ -23,6 +22,14 @@ from slugify import slugify
 from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from typing import TYPE_CHECKING, Optional
+
+
+from app.core.redis import redis_client
+from app.crypto.schemas import EncryptedResponse
+from app.crypto.services import encrypt_response_for_react
+from app.crypto.session_redis_store import SessionRedisStore
+
+crypto_session_store = SessionRedisStore(redis_client)
 
 
 
@@ -184,6 +191,23 @@ class NosservicesService:
         service = result.first()
         
         return service
+    
+    
+    async def get_service_by_slug(self, slug: str, session: AsyncSession):
+        statement = (
+            select(Service)
+            .options(
+                selectinload(Service.cree_par),
+                selectinload(Service.modifie_par),
+                selectinload(Service.supprime_par)
+            )
+            .where(Service.slug == slug)
+        )
+    
+        result = await session.exec(statement) 
+        service = result.first()
+            
+        return service
 
 
     async def restore_service(self, service_uid: UUID, current_user_uid:UUID, session: AsyncSession):
@@ -326,6 +350,59 @@ class NosservicesService:
         service = result.first()
 
         return service is None
+    
+    
+    async def encrypt_service_response(
+        self,
+        data: object,
+        crypto_session_id: str,
+    ) -> dict[str, str]:
+    
+        try:
+            session_uid = UUID(crypto_session_id)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "INVALID_CRYPTO_SESSION",
+                    "message": "L'identifiant de session cryptographique est invalide.",
+                },
+            ) from error
+
+        client_public_key = await crypto_session_store.get_client_public_key(
+            session_uid
+        )
+                
+    
+        if client_public_key is None:
+            raise HTTPException(
+                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+                detail={
+                    "code": "CLIENT_PUBLIC_KEY_REQUIRED",
+                    "message": (
+                        "La clé publique RSA de React est absente "
+                        "ou la session cryptographique a expiré."
+                    ),
+                },
+            )
+
+        try:
+            
+            data_encrypted=encrypt_response_for_react(
+                data=data,
+                client_public_key_pem=client_public_key,
+            )
+        
+            return data_encrypted
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "RESPONSE_ENCRYPTION_FAILED",
+                    "message": str(error),
+                },
+            ) from error
+    
 
 
 

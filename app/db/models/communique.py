@@ -36,10 +36,7 @@ class Communique(SQLModel, table=True):
     est_epingle: bool | None = Field(default=False, index=True)
     date_publication: datetime | None = Field(default=None, index=True)
     date_expiration: datetime | None = Field(default=None, index=True)
-    fichier_key: str | None = Field(
-        default=None,
-        max_length=500,
-    )
+    fichier_key: str | None = Field(default=None,max_length=500,)
     # Auteur
     auteur_uid: UUID | None = Field(
         default=None,

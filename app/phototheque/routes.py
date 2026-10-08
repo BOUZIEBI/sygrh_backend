@@ -1,6 +1,6 @@
 from typing import List, Annotated
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Request, Depends, status, File, Form, UploadFile
+from fastapi import APIRouter,Header, HTTPException, Request, Depends, status, File, Form, UploadFile
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.phototheque.services import PhotothequeService
 from datetime import datetime, timezone
@@ -10,23 +10,49 @@ from app.auth.dependencies import get_current_active_user, require_permission
 from app.phototheque.schemas import PhotothequeCreateModel, PhotothequeUpdateModel, PhotothequeResponse, MessageAllResponse, MessageResponse
 from app.core.exceptions_metier import RaiseException
 from app.core.railway_bucket import RailwayBucketService
+from app.crypto.schemas import EncryptedResponse
+
 
 
 phototheque_router = APIRouter()
 phototheque_service = PhotothequeService()
 railway_bucket_service = RailwayBucketService()
 
-@phototheque_router.get("/all",status_code=status.HTTP_200_OK, response_model=MessageAllResponse[PhotothequeResponse])
+@phototheque_router.get("/all",status_code=status.HTTP_200_OK, response_model=EncryptedResponse)
 async def get_all_phototheques(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
 )->dict:
     phototheques = await phototheque_service.get_all_phototheques(session)
-    return MessageAllResponse(
+    
+    phototheques_data = []
+    for phototheque in phototheques:
+        phototheque_data = PhotothequeResponse.model_validate(
+            phototheque
+        ).model_dump()
+    
+        if phototheque.fichier_key:
+            phototheque_data["fichier_url"] = (
+                railway_bucket_service.generer_url_signee(
+                    fichier_key=phototheque.fichier_key,
+                    expiration=3600,
+                )
+            )
+        else:
+            phototheque_data["fichier_url"] = None
+    
+        phototheques_data.append(phototheque_data)
+        
+    response_data = MessageAllResponse(
         code=status.HTTP_200_OK,
         success=True,
-        message="Photothèques trouvées avec succès",
-        data=phototheques
+        message="Actualités trouvées avec succès",
+        data=phototheques_data
     )
+
+    encrypt_data_phototheque=await phototheque_service.encrypt_phototheque_response(response_data, crypto_session_id)
+    return encrypt_data_phototheque
+    
 
 
 @phototheque_router.post(

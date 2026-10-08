@@ -32,13 +32,6 @@ class AuthSession(SQLModel, table=True):
             nullable=True
         )
     )
-    revoked_at: datetime | None = Field(
-        default=None,
-        sa_column=Column(
-            DateTime(timezone=True),
-            nullable=True
-        )
-    )
     replaced_by_session_id: Optional[str] = None
 
 
@@ -52,3 +45,4 @@ def hash_token(raw_token: str) -> str:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+

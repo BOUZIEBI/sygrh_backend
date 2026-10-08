@@ -1,30 +1,55 @@
-from typing import List
+from typing import List, Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter,Header, HTTPException, Request, Depends, status, File, Form, UploadFile
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.structure.services import StructureService
 from app.db.main import get_session
 from app.auth.dependencies import get_current_active_user, require_permission
 from app.structure.schemas import Structure, StructureCreateModel, StructureUpdateModel, StructureResponse, MessageResponse, MessageAllResponse
 from app.core.exceptions_metier import RaiseException
+from app.crypto.schemas import EncryptedResponse
+from app.auth.csrf import generate_csrf_token, verify_csrf_token
 
 
 structure_router = APIRouter()
 structure_service = StructureService()
 
-@structure_router.get("/all",status_code=status.HTTP_200_OK, response_model=MessageAllResponse[StructureResponse])
+@structure_router.get(
+    "/all",
+    status_code=status.HTTP_200_OK, 
+    #response_model=MessageAllResponse[StructureResponse],
+    response_model=EncryptedResponse, 
+)
 async def get_all_structures(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
+    dependencies=[
+        Depends(verify_csrf_token),
+    ],
     session: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_active_user),
     user_verifie=Depends(require_permission("VOIRLISTESTRUCTURE"))
 )->dict:
-    structures = await structure_service.get_all_structures(session)
-    return MessageAllResponse(
-        code=status.HTTP_200_OK,
-        success=True,
-        message="Structures trouvées avec succès",
-        data=structures
-    )
+    
+    if user_verifie.code==status.HTTP_401_UNAUTHORIZED and user_verifie.success==False :
+        response_data = MessageAllResponse(
+            code=user_verifie.code,
+            success=user_verifie.success,
+            message=user_verifie.message,
+            data=None
+        ) 
+        
+    if user_verifie.code==status.HTTP_200_OK and user_verifie.success==True :
+        structures = await structure_service.get_all_structures(session)
+        response_data = MessageAllResponse(
+            code=status.HTTP_200_OK,
+            success=True,
+            message="Structures trouvées avec succès",
+            data=structures
+        )
+   
+    encrypt_data_typeagents=await structure_service.encrypt_structure_response(response_data, crypto_session_id)
+    return encrypt_data_typeagents
 
 
 @structure_router.post("/",status_code=status.HTTP_201_CREATED,response_model=MessageResponse[StructureResponse])
@@ -69,6 +94,8 @@ async def get_une_structure(
         message="Élève trouvé avec succès",
         data=structure_trouve
     )
+
+
 
 @structure_router.patch("/",status_code=status.HTTP_201_CREATED,response_model=MessageResponse[StructureResponse])
 async def update_une_structure(

@@ -114,6 +114,7 @@ class ActualiteResponse(BaseModel):
     contenu: str
 
     fichier_key : str | None = None
+    fichier_url: str | None = None
     image_alt: str | None = None
 
     auteur_uid: UUID | None = None

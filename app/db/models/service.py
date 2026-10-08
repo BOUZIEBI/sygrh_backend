@@ -45,10 +45,7 @@ class Service(SQLModel, table=True):
     cout: float | None = Field(default=None, ge=0)
     lien_demande: str | None = Field(default=None, max_length=500)
 
-    fichier_key: str | None = Field(
-        default=None,
-        max_length=500,
-    )
+    fichier_key: str | None = Field(default=None,max_length=500,)
     # Contacts
     email: str | None = Field(default=None, max_length=255)
     telephone: str | None = Field(default=None, max_length=30)

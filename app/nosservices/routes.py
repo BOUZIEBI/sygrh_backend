@@ -1,9 +1,7 @@
-from typing import List
 from typing import List, Annotated
 from uuid import UUID
 from starlette.concurrency import run_in_threadpool
-from fastapi import APIRouter, HTTPException, Request, Depends, status, File, Form, UploadFile
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Header, HTTPException, Request, Depends, status, File, Form, UploadFile
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.nosservices.services import NosservicesService
 from app.db.main import get_session
@@ -11,23 +9,28 @@ from app.auth.dependencies import get_current_active_user, require_permission
 from app.nosservices.schemas import NosservicesCreateModel, NosservicesUpdateModel, MessageResponse, MessageAllResponse, NosservicesResponse
 from app.core.exceptions_metier import RaiseException
 from app.core.railway_bucket import RailwayBucketService
+from app.crypto.schemas import EncryptedResponse
 
 
 service_router = APIRouter()
 service_service = NosservicesService()
 railway_bucket_service = RailwayBucketService()
 
-@service_router.get("/all",status_code=status.HTTP_200_OK, response_model=MessageAllResponse[NosservicesResponse])
+@service_router.get("/all",status_code=status.HTTP_200_OK, response_model=EncryptedResponse)
 async def get_all_services(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     session: AsyncSession = Depends(get_session),
 )->dict:
     services = await service_service.get_all_services(session)
-    return MessageAllResponse(
+    response_data = MessageAllResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Services trouvés avec succès",
         data=services
     )
+    
+    encrypt_data_service=await service_service.encrypt_service_response(response_data, crypto_session_id)
+    return encrypt_data_service
 
 
 @service_router.post("/",status_code=status.HTTP_201_CREATED,response_model=MessageResponse[NosservicesResponse])
@@ -122,10 +125,11 @@ async def create_une_service(
     
 
 
-@service_router.get("/{service_uid}",status_code=status.HTTP_200_OK,response_model=MessageResponse[NosservicesResponse])
+@service_router.get("service_uid/{service_uid}",status_code=status.HTTP_200_OK,response_model=EncryptedResponse)
 async def get_un_service(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     service_uid: UUID,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     service_trouve = await service_service.get_service(service_uid, session)
 
@@ -137,13 +141,47 @@ async def get_un_service(
                     "service_uid": "Aucun service ne correspond à cet identifiant."
                 }
             ) 
-    
-    return MessageResponse(
+            
+        
+    response_data = MessageResponse(
         code=status.HTTP_200_OK,
         success=True,
         message="Service trouvé avec succès",
         data=service_trouve
     )
+        
+    encrypt_data_service=await service_service.encrypt_service_response(response_data, crypto_session_id)
+    return encrypt_data_service
+        
+    
+    
+@service_router.get("/{slug}",status_code=status.HTTP_200_OK,response_model=EncryptedResponse)
+async def get_un_service_by_slug(
+    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
+    slug: str,
+    session: AsyncSession = Depends(get_session)
+) -> dict:
+    service_trouve = await service_service.get_service_by_slug(slug, session)
+
+    if service_trouve is None:
+        raise RaiseException(
+            message="Service non trouvé",
+            code=404,
+            errors={
+                 "service_uid": "Aucun service ne correspond à cet identifiant."
+            }
+        ) 
+                
+            
+    response_data = MessageResponse(
+        code=status.HTTP_200_OK,
+        success=True,
+        message="Service trouvé avec succès",
+        data=service_trouve
+    )
+            
+    encrypt_data_service=await service_service.encrypt_service_response(response_data, crypto_session_id)
+    return encrypt_data_service
 
 
 
@@ -205,9 +243,7 @@ async def update_un_service(
             fichier,
             "services/images",
         )
-    print("------------ Image service -------------")
-    print(nouvelle_cle)
-    print("-----------------------------------------")
+ 
     # Ajouter uniquement les champs effectivement renseignés.
     donnees_modification: dict = {}
 

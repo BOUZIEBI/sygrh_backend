@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.db.models.auth_session import AuthSession, generate_raw_token, hash_token, utcnow
 from app.auth.schemas import UserCreate
+from app.agent.schemas import AgentCreateModel, AgentUpdateModel,ConjointCreateModel ,SituationAdministrativeCreateModel,AgentResponse, MessageResponse
 from app.db.models.login_attempt_state import LoginAttemptState
 from app.db.models.password_reset_token import PasswordResetToken
 from app.agent.schemas import AgentCreateModel, AgentUpdateModel,ConjointCreateModel ,SituationAdministrativeCreateModel,AgentResponse
@@ -62,7 +63,7 @@ class AgentService:
                 Agent.is_deleted == False
             )
             .order_by(
-                desc(Agent.nom)
+                Agent.cree_le.desc()
             )
         )
 
@@ -99,9 +100,11 @@ class AgentService:
         )
 
         if not matricule_existe:
-            raise RaiseException(
-                message="Cet agent existe déjà.",
-                code=status.HTTP_302_FOUND
+            return MessageResponse(
+                code=status.HTTP_302_FOUND,
+                success=False,
+                message="Cet agent avec ce matricule existe déjà.",
+                data=None
             )
         
         nature_acte_nomination_fonctionactuelle_uid=None
@@ -361,10 +364,12 @@ class AgentService:
         
         #Creer User
         user_data = UserCreate(
-            email= agent_data.email_personnel,
+            email= agent_data.matricule + "@example.com",
             role_uid=agent_data.role_uid,
             permissions=agent_data.permissions,
             password= '123456',
+            cree_par_uid=current_user_uid,
+            modifie_par_uid=current_user_uid
             #password= hash_password(
             #    ''.join(secrets.choice("0123456789")for _ in range(12))
             #), 
@@ -416,7 +421,7 @@ class AgentService:
             genre_uid = genre_uid,
             nature_acte_nomination_fonctionactuelle_uid = nature_acte_nomination_fonctionactuelle_uid,
             type_agent_uid =  type_agent_uid,
-            user_uid = user_cree.uid,
+            user_uid = user_cree.uid, 
             nationalite_uid = nationalite_uid,
             structure_uid = structure_uid,
             fonction_uid = fonction_uid,
@@ -441,9 +446,14 @@ class AgentService:
                 session,
                 agent.uid
             )
-
-        return agent_recharge
-
+            
+        return MessageResponse(
+            code=status.HTTP_201_CREATED,
+            success=True,
+            message="Agent créé avec succès.",
+            data=agent_recharge
+        )
+       
     
     async def update_agent(
         self,
@@ -1715,21 +1725,14 @@ class AgentService:
     async def verifier_matricule_unique(
         self,
         session: AsyncSession,
-        matricule: str,
-        agent_uid: UUID | None = None,
+        matricule: str
     ) -> bool:
 
         statement = select(Agent).where(
             Agent.matricule == matricule
         )
 
-        # Pour UPDATE : ne pas comparer l'agent avec lui-même
-        if agent_uid is not None:
-            statement = statement.where(
-                Agent.uid != agent_uid
-            )
-
-        result = await session.exec(statement)
+        result = await session.execute(statement)
 
         agent = result.first()
 

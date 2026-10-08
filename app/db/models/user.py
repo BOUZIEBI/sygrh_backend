@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.db.models.actualite import Actualite
     from app.db.models.service import Service
     from app.db.models.phototheque import Phototheque
+    from app.db.models.client_public_key import ClientPublicKey
     
 
 
@@ -77,6 +78,17 @@ class User(SQLModel, table=True):
             "cascade": "all, delete-orphan"  # Supprime l'agent si le User est supprimé
         }
     )
+    
+    
+    client_public_key: Optional["ClientPublicKey"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "uselist": False,
+            "foreign_keys": "ClientPublicKey.user_uid",
+            "cascade": "all, delete-orphan"  # Supprime l'agent si le User est supprimé
+        }
+    )
+    
     eleve_cree: Optional["Eleve"] = Relationship(
         back_populates="cree_par",
         sa_relationship_kwargs={

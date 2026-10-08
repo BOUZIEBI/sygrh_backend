@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from app.core.config import settings
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from app.auth.routes import auth_router
 from app.structure.routes import structure_router
@@ -19,10 +20,12 @@ from app.agent.routes import agent_router
 from app.communique.routes import communique_router 
 from app.actualite.routes import actualite_router
 from app.crypto.routes import crypto_router
+from app.departement.routes import departement_router
 from app.redis.routes import redis_router
 from app.nosservices import *
 from app.phototheque import phototheque_router
 from app.message import message_router
+from app.visiteur_session import visiteur_session_router
 from fastapi.exceptions import RequestValidationError
 from app.core.exception_handlers import validation_exception_handler
 from app.core.exception_handlers import metier_exception_handler
@@ -42,6 +45,66 @@ app = FastAPI(
         "email": "contact@inovel.net"
     }
 )
+
+
+if settings.DEBUG:
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ]
+
+    # Permet également de tester le frontend déployé
+    # depuis l’environnement local.
+    if settings.FRONTEND_URL:
+        origins.append(
+            str(settings.FRONTEND_URL)
+            .rstrip("/")
+        )
+
+else:
+    if not settings.FRONTEND_URL:
+        raise RuntimeError(
+            "FRONTEND_URL doit être définie "
+            "en production."
+        )
+
+    origins = [
+        str(settings.FRONTEND_URL)
+        .rstrip("/")
+    ]
+
+# Supprimer les valeurs vides et les doublons
+origins = list(
+    dict.fromkeys(
+        origin
+        for origin in origins
+        if origin
+    )
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-CSRF-Token",
+        "X-Crypto-Session-ID",
+    ],
+)
+
 
 #Pour les exceptions de validation des requestes
 app.add_exception_handler(
@@ -85,6 +148,9 @@ app.include_router(actualite_router, prefix=f"{version_prefix}/actualite", tags=
 app.include_router(service_router, prefix=f"{version_prefix}/service", tags=["service"])
 app.include_router(phototheque_router, prefix=f"{version_prefix}/phototheque", tags=["phototheque"])
 app.include_router(message_router, prefix=f"{version_prefix}/message", tags=["message"])
+app.include_router(visiteur_session_router, prefix=f"{version_prefix}/visiteursession", tags=["visiteursession"])
+
+app.include_router(departement_router, prefix=f"{version_prefix}/departement", tags=["departement"])
 
 
 
