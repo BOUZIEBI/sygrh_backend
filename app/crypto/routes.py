@@ -249,7 +249,7 @@ async def register_public_key(
                 "code": "RSA_PRIVATE_KEY_ERROR",
                 "message": (
                     "La configuration cryptographique "
-                    "du serveur est invalide."
+                    "du serveur est invalide ."
                 ),
             },
         ) from error
