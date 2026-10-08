@@ -36,6 +36,10 @@ from app.core.exceptions_metier import RaiseException
 
 version = os.getenv("APP_VERSION", "")
 
+RAILWAY_FRONTEND = (
+    "https://mesrssitevitrine-production.up.railway.app"
+)
+
 app = FastAPI(
     version=version,
     title=os.getenv("APP_NAME", ""),
@@ -134,6 +138,13 @@ app.add_exception_handler(
 )
 
 version_prefix =f"/api/{version}"
+
+@app.get("/cors-test")
+async def cors_test():
+    return {
+        "success": True,
+        "allowed_origin": RAILWAY_FRONTEND,
+    }
 
 app.include_router(typeagent_router, prefix=f"{version_prefix}/typeagent", tags=["typeagent"])
 app.include_router(auth_router, prefix=f"{version_prefix}/auth", tags=["auth"])
