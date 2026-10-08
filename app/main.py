@@ -75,7 +75,12 @@ else:
             "en production."
         )
 
-    origins.append(settings.FRONTEND_URL)
+    #origins.append(settings.FRONTEND_URL)
+    origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://sygrhbackend-production.up.railway.app",
+        ]
 
 # Suppression des valeurs vides et des doublons
 origins = list(dict.fromkeys(origins))

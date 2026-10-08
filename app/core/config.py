@@ -280,6 +280,11 @@ class Settings:
             ""
         ).strip()
         
+        self.RSA_PRIVATE_KEY_BASE64 = os.getenv(
+            "RSA_PRIVATE_KEY_BASE64",
+            ""
+        ).strip()
+        
         # --------------------------------------------------
         # GEMINI
         # --------------------------------------------------
