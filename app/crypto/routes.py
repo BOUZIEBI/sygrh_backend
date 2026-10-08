@@ -174,6 +174,7 @@ async def register_public_key(
         
         
     # Comparer les deux UUID
+    """
     if header_session_uid != redis_session_uid:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -185,8 +186,8 @@ async def register_public_key(
                 ),
             },
         )
-        
-        
+    """
+    
     # Valider l’identifiant provenant de Redis
     try:
         redis_session_uid = UUID(

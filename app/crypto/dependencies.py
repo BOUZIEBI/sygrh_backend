@@ -11,9 +11,6 @@ async def get_crypto_session_uid(
         alias=CRYPTO_SESSION_COOKIE,
     ),
 ) -> UUID:
-    print("----------- crypto_session_id 2--------------")
-    print(crypto_session_id)
-    print("----------- crypto_session_id 2--------------")
     if not crypto_session_id:
         raise HTTPException(
             status_code=status.HTTP_428_PRECONDITION_REQUIRED,

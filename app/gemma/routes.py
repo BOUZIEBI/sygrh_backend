@@ -1,4 +1,4 @@
-# app/routers/assistant.py
+# app/gemma/routes.py
 
 from fastapi import APIRouter, Depends, status
 
