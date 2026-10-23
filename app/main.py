@@ -84,7 +84,7 @@ ALLOWED_HOSTS = get_env_list(
 CSRF_TRUSTED_ORIGINS = get_env_list(
     "CSRF_TRUSTED_ORIGINS",
     (
-        "https://recrutementdocteurfrontend-production-dcc6.up.railway.app,"
+        "https://sygrh-frontend-fastapi-production.up.railway.app,"
         "http://localhost:5173"
     ),
 )
@@ -94,7 +94,7 @@ CSRF_TRUSTED_ORIGINS = get_env_list(
 CORS_ALLOWED_ORIGINS = get_env_list(
     "CORS_ALLOWED_ORIGINS",
     (
-        "https://recrutementdocteurfrontend-production-dcc6.up.railway.app,"
+        "https://sygrh-frontend-fastapi-production.up.railway.app," 
         "http://localhost:5173"
     ),
 )
