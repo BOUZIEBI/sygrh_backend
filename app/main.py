@@ -1,7 +1,20 @@
-from fastapi import FastAPI, HTTPException
-from app.core.config import settings
-from fastapi.middleware.cors import CORSMiddleware
+# app/main.py
+
 import os
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+from app.core.exception_handlers import (
+    metier_exception_handler,
+    validation_exception_handler,
+)
+from app.core.exceptions import http_exception_handler
+from app.core.exceptions_metier import RaiseException
+
 from app.auth.routes import auth_router
 from app.structure.routes import structure_router
 from app.type_structure.routes import typstructure_router
@@ -15,81 +28,102 @@ from app.emploi.routes import emploi_router
 from app.grade.routes import grade_router
 from app.statut.routes import statut_router
 from app.fichevalidation.routes import fichevalidation_router
-from app.nature_acte_nomination_fonctionactuelle.routes import nature_acte_nomination_fonctionactuelle_router
+from app.nature_acte_nomination_fonctionactuelle.routes import (
+    nature_acte_nomination_fonctionactuelle_router,
+)
 from app.agent.routes import agent_router
-from app.communique.routes import communique_router 
+from app.communique.routes import communique_router
 from app.actualite.routes import actualite_router
 from app.crypto.routes import crypto_router
 from app.departement.routes import departement_router
 from app.redis.routes import redis_router
-from app.nosservices import *
+
+from app.nosservices import service_router
 from app.phototheque import phototheque_router
 from app.message import message_router
 from app.visiteur_session import visiteur_session_router
-from fastapi.exceptions import RequestValidationError
-from app.core.exception_handlers import validation_exception_handler
-from app.core.exception_handlers import metier_exception_handler
-from app.core.exceptions import http_exception_handler
-from app.core.exceptions_metier import RaiseException
 
 
+# Lecture des listes depuis les variables d'environnement
+def get_env_list(
+    name: str,
+    default: str = "",
+) -> list[str]:
+    value = os.getenv(name, default)
 
-version = os.getenv("APP_VERSION", "")
+    return list(
+        dict.fromkeys(
+            item.strip()
+            for item in value.split(",")
+            if item.strip()
+        )
+    )
 
-RAILWAY_FRONTEND = (
-    "https://mesrssitevitrine-production.up.railway.app"
+
+# Métadonnées
+APP_VERSION = os.getenv("APP_VERSION", "").strip() or "v1"
+APP_NAME = os.getenv("APP_NAME", "").strip() or "SYGRH API"
+APP_DESCRIPTION = os.getenv("APP_DESCRIPTION", "").strip()
+
+VERSION_PREFIX = f"/api/{APP_VERSION}"
+
+
+# Hôtes autorisés : sans protocole ni chemin
+ALLOWED_HOSTS = get_env_list(
+    "ALLOWED_HOSTS",
+    (
+        "sygrhbackend-production.up.railway.app,"
+        "localhost,"
+        "127.0.0.1"
+    ),
 )
 
+
+# Origines de confiance pour ta protection CSRF
+# Cette liste doit être utilisée par ta vérification CSRF.
+CSRF_TRUSTED_ORIGINS = get_env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    (
+        "https://recrutementdocteurfrontend-production-dcc6.up.railway.app,"
+        "http://localhost:5173"
+    ),
+)
+
+
+# Origines autorisées à appeler l'API depuis un navigateur
+CORS_ALLOWED_ORIGINS = get_env_list(
+    "CORS_ALLOWED_ORIGINS",
+    (
+        "https://recrutementdocteurfrontend-production-dcc6.up.railway.app,"
+        "http://localhost:5173"
+    ),
+)
+
+
+# Application
 app = FastAPI(
-    version=version,
-    title=os.getenv("APP_NAME", ""),
-    description=os.getenv("APP_DESCRIPTION", ""), 
+    title=APP_NAME,
+    description=APP_DESCRIPTION,
+    version=APP_VERSION,
     contact={
         "name": "Inovel",
-        "email": "contact@inovel.net"
-    }
+        "email": "contact@inovel.net",
+    },
 )
 
-origins: list[str] = []
 
-if settings.DEBUG:
-    origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ]
-
-    # Permet également de tester le frontend déployé
-    # depuis l’environnement local.
-    if settings.FRONTEND_URL:
-        origins.append(
-            str(settings.FRONTEND_URL)
-            .rstrip("/")
-        )
-
-else:
-    if not settings.FRONTEND_URL:
-        raise RuntimeError(
-            "FRONTEND_URL doit être définie "
-            "en production."
-        )
-
-    #origins.append(settings.FRONTEND_URL)
-    origins = [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "https://sygrhbackend-production.up.railway.app",
-        ]
-
-# Suppression des valeurs vides et des doublons
-origins = list(dict.fromkeys(origins))
+# Vérification de l'en-tête Host
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=ALLOWED_HOSTS,
+    www_redirect=False,
+)
 
 
-"""
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=[
         "GET",
@@ -97,25 +131,17 @@ app.add_middleware(
         "PUT",
         "PATCH",
         "DELETE",
+        "HEAD",
         "OPTIONS",
     ],
     allow_headers=[
+        "Accept",
         "Content-Type",
         "Authorization",
         "X-CSRF-Token",
         "X-Crypto-Session-ID",
     ],
-)
-"""
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
     expose_headers=[
-        "Content-Type",
         "Authorization",
         "X-CSRF-Token",
         "X-Crypto-Session-ID",
@@ -124,65 +150,103 @@ app.add_middleware(
 )
 
 
-#Pour les exceptions de validation des requestes
+# Gestionnaires d'exceptions
 app.add_exception_handler(
     RequestValidationError,
-    validation_exception_handler
+    validation_exception_handler,
 )
 
-#Pour les exceptions globales : erreur serveur, body endpoint absent etc
 app.add_exception_handler(
-    HTTPException,
+    StarletteHTTPException,
     http_exception_handler,
 )
 
-#Pour les exception portant sur les objets non trouves etc
 app.add_exception_handler(
     RaiseException,
-    metier_exception_handler
+    metier_exception_handler,
 )
 
-version_prefix =f"/api/{version}"
 
-@app.get("/cors-test")
-async def cors_test():
+# Routes
+routers = [
+    (auth_router, "auth", "auth"),
+    (typeagent_router, "typeagent", "typeagent"),
+    (
+        naturepieceidentite_router,
+        "nature-piece-identite",
+        "naturepieceidentite",
+    ),
+    (genre_router, "genre", "genre"),
+    (nationalite_router, "nationalite", "nationalite"),
+    (typstructure_router, "typestructure", "typestructure"),
+    (structure_router, "structure", "structure"),
+    (fonction_router, "fonction", "fonction"),
+    (
+        situationmatrimoniale_router,
+        "situationmatrimoniale",
+        "situationmatrimoniale",
+    ),
+    (emploi_router, "emploi", "emploi"),
+    (grade_router, "grade", "grade"),
+    (statut_router, "statut", "statut"),
+    (
+        fichevalidation_router,
+        "fichevalidation",
+        "fichevalidation",
+    ),
+    (
+        nature_acte_nomination_fonctionactuelle_router,
+        "nature-acte-nomination-fonctionactuelle",
+        "natureactenominationfonctionactuelle",
+    ),
+    (agent_router, "agent", "agent"),
+    (crypto_router, "crypto", "crypto"),
+    (redis_router, "redis", "redis"),
+    (communique_router, "communique", "communique"),
+    (actualite_router, "actualite", "actualite"),
+    (service_router, "service", "service"),
+    (phototheque_router, "phototheque", "phototheque"),
+    (message_router, "message", "message"),
+    (
+        visiteur_session_router,
+        "visiteursession",
+        "visiteursession",
+    ),
+    (departement_router, "departement", "departement"),
+]
+
+for router, path, tag in routers:
+    app.include_router(
+        router,
+        prefix=f"{VERSION_PREFIX}/{path}",
+        tags=[tag],
+    )
+
+
+@app.get("/", tags=["Accueil"])
+async def root():
     return {
         "success": True,
-        "allowed_origin": RAILWAY_FRONTEND,
+        "message": f"{APP_NAME} running",
+        "version": APP_VERSION,
     }
 
-app.include_router(typeagent_router, prefix=f"{version_prefix}/typeagent", tags=["typeagent"])
-app.include_router(auth_router, prefix=f"{version_prefix}/auth", tags=["auth"])
-app.include_router(naturepieceidentite_router, prefix=f"{version_prefix}/nature-piece-identite", tags=["naturepieceidentite"])
-app.include_router(genre_router, prefix=f"{version_prefix}/genre", tags=["genre"])
-app.include_router(nationalite_router, prefix=f"{version_prefix}/nationalite", tags=["nationalite"])
-app.include_router(typstructure_router, prefix=f"{version_prefix}/typestructure", tags=["typestructure"])
-app.include_router(structure_router, prefix=f"{version_prefix}/structure", tags=["structure"])
-app.include_router(fonction_router, prefix=f"{version_prefix}/fonction", tags=["fonction"])
-app.include_router(situationmatrimoniale_router, prefix=f"{version_prefix}/situationmatrimoniale", tags=["situationmatrimoniale"])
-app.include_router(emploi_router, prefix=f"{version_prefix}/emploi", tags=["emploi"])
-app.include_router(grade_router, prefix=f"{version_prefix}/grade", tags=["grade"])
-app.include_router(statut_router, prefix=f"{version_prefix}/statut", tags=["statut"])
-app.include_router(fichevalidation_router, prefix=f"{version_prefix}/fichevalidation", tags=["statut"])
-app.include_router(nature_acte_nomination_fonctionactuelle_router, prefix=f"{version_prefix}/nature-acte-nomination-fonctionactuelle", tags=["natureactenominationfonctionactuelle"])
-app.include_router(agent_router, prefix=f"{version_prefix}/agent", tags=["agent"])
-app.include_router(crypto_router, prefix=f"{version_prefix}/crypto", tags=["crypto"])
-app.include_router(redis_router, prefix=f"{version_prefix}/redis", tags=["crypto"])
-app.include_router(communique_router, prefix=f"{version_prefix}/communique", tags=["communique"])
-app.include_router(actualite_router, prefix=f"{version_prefix}/actualite", tags=["actualite"])
-app.include_router(service_router, prefix=f"{version_prefix}/service", tags=["service"])
-app.include_router(phototheque_router, prefix=f"{version_prefix}/phototheque", tags=["phototheque"])
-app.include_router(message_router, prefix=f"{version_prefix}/message", tags=["message"])
-app.include_router(visiteur_session_router, prefix=f"{version_prefix}/visiteursession", tags=["visiteursession"])
 
-app.include_router(departement_router, prefix=f"{version_prefix}/departement", tags=["departement"])
+@app.get("/health", tags=["Santé"])
+async def health():
+    return {"status": "ok"}
 
 
+@app.get("/cors-test", tags=["Diagnostic"])
+async def cors_test(request: Request):
+    origin = request.headers.get("origin")
 
-
-@app.get("/")
-def root():
     return {
-        "message": f"{settings.APP_NAME} running 🚀",
-        "debug": settings.DEBUG
+        "success": True,
+        "origin": origin,
+        "origin_allowed": (
+            origin in CORS_ALLOWED_ORIGINS
+            if origin
+            else False
+        ),
     }

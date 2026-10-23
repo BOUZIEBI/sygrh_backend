@@ -351,17 +351,13 @@ async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSe
 
 @auth_router.get(
     "/me", 
-    response_model=EncryptedResponse,
-    #response_model=MessageResponse_,
-    dependencies=[
-        Depends(verify_csrf_token),
-    ],
+    #response_model=EncryptedResponse,
+    response_model=MessageResponse_,
 )
 async def getUser(
-    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_session)
-)->EncryptedResponse:
+)->dict:
     
     user_recharge=await recharger_user(session=db, user_uid=current_user.user.uid)
     user_response = UserResponse.model_validate(user_recharge)
@@ -371,22 +367,18 @@ async def getUser(
         message=current_user.message,
         data=user_response
     )
-    #return response_data#
-    encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-    return encrypt_data_auth
+    return response_data
+    #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
+    #return encrypt_data_auth
 
 
 
 @auth_router.post(
     "/refresh", 
-    #response_model=TokenResponse,
-    response_model=EncryptedResponse,
-    dependencies=[
-        Depends(verify_csrf_token),
-    ],
+    response_model=TokenResponse,
+    #response_model=EncryptedResponse,
 )
 async def refresh_tokens(
-    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     request: Request,
     payload: str | None = Depends(
         oauth2_scheme
@@ -412,6 +404,7 @@ async def refresh_tokens(
             message="Invalid refresh token.",
             remaining=0
         )
+        return response_data
         encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
         return encrypt_data_auth
         
@@ -422,6 +415,7 @@ async def refresh_tokens(
             message="Invalid refresh token.",
             remaining=0
         )
+        return response_data
         encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
         return encrypt_data_auth
 
@@ -435,6 +429,7 @@ async def refresh_tokens(
             message="Invalid refresh token.",
             remaining=0
         )
+        return response_data
         encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
         return encrypt_data_auth
 
@@ -446,6 +441,7 @@ async def refresh_tokens(
             message="User not found or inactive.",
             remaining=0
         )
+        return response_data
         encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
         return encrypt_data_auth
 
@@ -465,16 +461,15 @@ async def refresh_tokens(
     response_data = TokenResponse(
         code=status.HTTP_201_CREATED,
         success=True,
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
+        access=new_access_token,
+        refresh=new_refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
-    #return response_data
+    return response_data
 
     encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
     return encrypt_data_auth
-
 
 
 @auth_router.post(

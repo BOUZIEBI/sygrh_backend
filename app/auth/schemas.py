@@ -202,8 +202,8 @@ class PasswordResetConfirmModel(BaseModel):
 class TokenResponse(BaseModel, Generic[T]):
     code:int
     success:bool
-    access_token: str
-    refresh_token: str
+    access: str
+    refresh: str
     token_type: str = "bearer"
     expires_in: int
     data: T | None = None 
