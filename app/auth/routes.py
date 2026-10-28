@@ -115,9 +115,9 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_session)):
     "/login",
     status_code=status.HTTP_200_OK,
     response_model=LoginResponse,
-    dependencies=[
-        Depends(verify_env_csrf_token),
-    ],
+    #dependencies=[
+    #    Depends(verify_env_csrf_token),
+    #],
 )
 async def login(
     request: Request,
@@ -287,9 +287,9 @@ async def login(
     "/affecter-permission",
     response_model=MessageResponse_[UserResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[
-        Depends(verify_env_csrf_token),
-    ],
+    #dependencies=[
+    #    Depends(verify_env_csrf_token),
+    #],
 )
 async def affecterPermission(
     user_data: AffectationPermissionCreate, 
@@ -309,9 +309,9 @@ async def affecterPermission(
 @auth_router.get(
     "/me", 
     response_model=MessageResponse_,
-    dependencies=[
-        Depends(verify_env_csrf_token),
-    ],
+    #dependencies=[
+    #    Depends(verify_env_csrf_token),
+    #],
 )
 async def getUser(
     current_user=Depends(get_current_active_user),
@@ -333,9 +333,9 @@ async def getUser(
 @auth_router.post(
     "/refresh", 
     response_model=TokenResponse,
-    dependencies=[
-        Depends(verify_env_csrf_token),
-    ],
+    #dependencies=[
+    #    Depends(verify_env_csrf_token),
+    #],
 )
 async def refresh_tokens(
     request: Request,
@@ -495,7 +495,7 @@ async def refresh_tokens(
 @auth_router.post(
     "/deconnexion",
     response_model=MessageResponse,
-    dependencies=[Depends(verify_env_csrf_token)],
+    #dependencies=[Depends(verify_env_csrf_token)],
 )
 async def logout(
     payload: str | None = Depends(oauth2_scheme),
@@ -555,7 +555,7 @@ async def logout(
 @auth_router.post(
     "/forcer-deconnexion",
     response_model=MessageResponse,
-    dependencies=[Depends(verify_env_csrf_token)],
+    #dependencies=[Depends(verify_env_csrf_token)],
 )
 async def forcerlogout(
     refresh_data: RefreshRequestData,
