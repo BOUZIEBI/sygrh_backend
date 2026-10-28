@@ -105,11 +105,13 @@ async def recharger_user(
             selectinload(User.agent),
             selectinload(User.permissions),
         )
+        .execution_options(populate_existing=True)
     )
 
     result = await session.exec(statement)
-
     return result.one_or_none()
+
+
 
 async def get_user_by_email(
     session: AsyncSession,
@@ -304,7 +306,7 @@ async def create_auth_session(db: AsyncSession, user_id: int, session_id: str, r
     return session
 
 
-async def get_auth_session_dev(db: AsyncSession, session_id: str) -> AuthSession | None:
+async def get_auth_session_dev(db: AsyncSession, session_id: UUID) -> AuthSession | None:
     statement = select(AuthSession).where(
         AuthSession.uid == session_id
     )
@@ -323,15 +325,19 @@ async def get_auth_session(db: AsyncSession, refresh_token_hash: str) -> AuthSes
     return result.scalar_one_or_none()
 
 
-async def validate_refresh_session(db: AsyncSession, session_id: str, refresh_token: str) -> AuthSession | None:
+async def validate_refresh_session(
+    db: AsyncSession,
+    session_id: UUID,
+    refresh_token: str,
+) -> AuthSession | None:
    
     session = await get_auth_session(db, hash_token(refresh_token))
-    
+     
     if session is None:
         return None
-    
-    #if session.is_revoked :
-    #    return None
+     
+    if session.uid != session_id or session.is_revoked:
+        return None
 
     if session.refresh_token_hash != hash_token(refresh_token):
         # Token reuse/tampering attempt: revoke all sessions for that user.
@@ -341,8 +347,12 @@ async def validate_refresh_session(db: AsyncSession, session_id: str, refresh_to
     return session
 
 
-async def revoke_auth_session(db: AsyncSession, session_id: str, replaced_by_session_id: str | None = None) -> bool:
-    session = await get_auth_session(db, session_id)
+async def revoke_auth_session(
+    db: AsyncSession,
+    session_id: UUID,
+    replaced_by_session_id: str | None = None,
+) -> bool:
+    session = await get_auth_session_dev(db, session_id)
     if session is None:
         return False
 
@@ -362,9 +372,7 @@ async def revoke_all_auth_sessions(db: AsyncSession, user_id: int) -> int:
 
     result = await db.execute(statement)
 
-    sessions = list(
-        result.scalars().all()
-    )
+    sessions = list(result.scalars().all())
 
     if not sessions:
         return 0
@@ -384,6 +392,7 @@ async def revoke_all_auth_sessions(db: AsyncSession, user_id: int) -> int:
     return len(sessions)
 
 
+
 async def rotate_refresh_session(
     db: AsyncSession,
     current_session: AuthSession,
@@ -395,10 +404,9 @@ async def rotate_refresh_session(
     current_session.replaced_by_session_id = new_session_id
 
     new_session = AuthSession(
-        id=new_session_id,
-        user_id=current_session.user_uid,
+        uid=UUID(new_session_id),
+        user_uid=current_session.user_uid,
         refresh_token_hash=hash_token(new_refresh_token),
-        expires_at=utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(new_session)
     await db.commit()
@@ -626,4 +634,3 @@ async def encrypt_auth_response(
             },
         ) from error
     
-

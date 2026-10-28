@@ -61,6 +61,11 @@ class Settings:
             # SECURITY
             # --------------------------------------------------
 
+        self.X_CSRF_TOKEN = os.getenv(
+            "X_CSRF_TOKEN", 
+            "",
+        ).strip()
+        
         self.SECRET_KEY = os.getenv(
             "SECRET_KEY",
             "",
@@ -79,7 +84,7 @@ class Settings:
         self.ACCESS_TOKEN_EXPIRE_MINUTES = int(
                 os.getenv(
                     "ACCESS_TOKEN_EXPIRE_MINUTES",
-                    "30",
+                    "",
                 )
         )
 

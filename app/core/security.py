@@ -1,12 +1,13 @@
 from pwdlib import PasswordHash
 import re
 
-
+from secrets import compare_digest
+from typing import Annotated
+from fastapi import Header, HTTPException, status
+from app.core.config import settings
 
 
 password_hash = PasswordHash.recommended()
-
-
 
 
 
@@ -30,4 +31,39 @@ def validate_password_strength(password: str) -> bool:
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
         return False
     return True
+
+
+async def verify_env_csrf_token(
+    x_csrf_token: Annotated[
+        str | None,
+        Header(alias="X-CSRF-TOKEN"),
+    ] = None,
+) -> None:
+    print(x_csrf_token)
+    if not x_csrf_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CSRF_TOKEN_MISSING",
+                "message": "Le token CSRF est absent.",
+            },
+        )
+
+    if not settings.X_CSRF_TOKEN:
+        raise RuntimeError(
+            "La variable X_CSRF_TOKEN n’est pas configurée."
+        )
+
+    if not compare_digest(
+        x_csrf_token,
+        settings.X_CSRF_TOKEN,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "INVALID_CSRF_TOKEN",
+                "message": "Le token CSRF est invalide.",
+            },
+        )
+
 

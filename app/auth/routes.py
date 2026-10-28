@@ -47,8 +47,11 @@ from app.auth.schemas import (
     LoginRequestData,
     ErrorLoginResponse,
     MessageLogoutResponse,
-    LoginPayload
+    LoginPayload,
+    RefreshRequestData
 )
+from jose import JWTError, ExpiredSignatureError
+from app.core.security import verify_env_csrf_token
 from fastapi.security import OAuth2PasswordBearer
 from app.auth.schemas import UserCreate, AffectationPermissionCreate, UserResponse, MessageResponse_,LogoutResponse, LoginRequest
 from app.auth.services import recharger_user, consume_password_reset_token,create_auth_session, encrypt_auth_response, create_password_reset_token, generate_session_id,is_user_login_locked, register_failed_login, reset_failed_logins, revoke_all_auth_sessions, revoke_auth_session, rotate_refresh_session, validate_refresh_session
@@ -77,6 +80,9 @@ async def get_csrf_token(response: Response):
     "/register",
     response_model=MessageResponse_[UserResponse],
     status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(verify_env_csrf_token),
+    ],
 )
 async def register(user: UserCreate, db: AsyncSession = Depends(get_session)):
     
@@ -108,66 +114,20 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_session)):
 @auth_router.post(
     "/login",
     status_code=status.HTTP_200_OK,
-    #response_model=EncryptedResponse,
-    response_model=LoginResponse
+    response_model=LoginResponse,
+    dependencies=[
+        Depends(verify_env_csrf_token),
+    ],
 )
 async def login(
-    #crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
     request: Request,
     response: Response,
-    #auth_data: EncryptedPayload,
     auth_data: LoginRequest,
     db: AsyncSession = Depends(
         get_session
     ),
 ) -> dict:
     
-    # 1. Déchiffrer les données envoyées par React
-    """ 
-    try:
-        decrypted_data = decrypt_client_payload(auth_data)
-    except ValueError as error:
-        
-        response_data=ErrorLoginResponse(
-            code=status.HTTP_400_BAD_REQUEST,
-            success=False,
-            message="Impossible de déchiffrer les données d’authentification.",
-            remaining=0
-        )
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
-        
-    except RuntimeError as error:
-        # Problème avec la clé privée FastAPI
-        response_data = ErrorLoginResponse(
-            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            success=False,
-            message="La configuration cryptographique du serveur est invalide.",
-            remaining=0
-        )
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
-    """
-    """ 
-    # 2. Valider les données déchiffrées
-    try:
-        credentials = (
-            LoginRequestData.model_validate(
-                decrypted_data
-            )
-        )
-    except ValidationError as error:
-        
-        response_data= ErrorLoginResponse(
-            code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            success=False,
-            message="Les données d’authentification sont invalides.",
-            remaining=0
-        )
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
-    """
-
     email = (
         #credentials.username
         auth_data.username
@@ -209,8 +169,7 @@ async def login(
             remaining=remaining
         )
         return response_data
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
+       
 
     # 5. Rechercher et authentifier l’utilisateur
     user = await get_user_by_email(db,email,)
@@ -246,8 +205,6 @@ async def login(
             remaining=0
         )
         return response_data
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
 
 
     # Ici, user ne peut plus être None
@@ -260,8 +217,6 @@ async def login(
             remaining=0
         )
         return response_data
-        #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        #return encrypt_data_auth
 
     user_uid = user.uid
     session_id = generate_session_id()
@@ -273,9 +228,7 @@ async def login(
             "sid": str(session_id),
         },
         expires_delta=timedelta(
-            days=(
-                settings.ACCESS_TOKEN_EXPIRE_MINUTES
-            )
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         ),
     )
 
@@ -327,17 +280,21 @@ async def login(
         data=token_data,
     )
     return response_data
-    #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-    #return encrypt_data_auth
-    
+   
 
 
 @auth_router.post(
     "/affecter-permission",
     response_model=MessageResponse_[UserResponse],
     status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(verify_env_csrf_token),
+    ],
 )
-async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSession = Depends(get_session)):
+async def affecterPermission(
+    user_data: AffectationPermissionCreate, 
+    db: AsyncSession = Depends(get_session)
+)->MessageResponse:
     
     nouvel_utilisateur=await affecter_permissions(db, user_data.user_uid, user_data.permissions)
 
@@ -351,8 +308,10 @@ async def affecterPermission(user_data: AffectationPermissionCreate, db: AsyncSe
 
 @auth_router.get(
     "/me", 
-    #response_model=EncryptedResponse,
     response_model=MessageResponse_,
+    dependencies=[
+        Depends(verify_env_csrf_token),
+    ],
 )
 async def getUser(
     current_user=Depends(get_current_active_user),
@@ -368,88 +327,146 @@ async def getUser(
         data=user_response
     )
     return response_data
-    #encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-    #return encrypt_data_auth
 
 
 
 @auth_router.post(
     "/refresh", 
     response_model=TokenResponse,
-    #response_model=EncryptedResponse,
+    dependencies=[
+        Depends(verify_env_csrf_token),
+    ],
 )
 async def refresh_tokens(
     request: Request,
+    refresh_data: RefreshRequestData,
     payload: str | None = Depends(
         oauth2_scheme
     ),
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_session),
+    
 )->TokenResponse:
-    refresh_token = payload
-   
+    refresh_token = refresh_data.refresh_token
+    
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "REFRESH_TOKEN_MISSING",
+                "message": "Le refresh token est absent.",
+            },
+        )
+        
     try:
-        refresh_token = (
-            payload
-            .removeprefix("Bearer ")
-            .strip()
+        decoded = decode_refresh_token(
+            refresh_token
         )
-        decoded = decode_refresh_token(refresh_token)
-        user_id = UUID(decoded.get("sub"))
+
+        subject = decoded.get("sub")
         session_id = decoded.get("sid")
-        
-    except (JWTError, TypeError, ValueError):
-        response_data= ErrorLoginResponse(
-            code=status.HTTP_401_UNAUTHORIZED,
-            success=False,
-            message="Invalid refresh token.",
-            remaining=0
-        )
-        return response_data
-        encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        return encrypt_data_auth
-        
+        token_type = decoded.get("type")
+
+        if not isinstance(subject, str):
+            raise ValueError(
+                "Le champ sub est invalide."
+            )
+
+        if not isinstance(session_id, str):
+            raise ValueError(
+                "Le champ sid est invalide."
+            )
+
+        if token_type != "refresh":
+            raise ValueError(
+                "Le token fourni n’est pas "
+                "un refresh token."
+            )
+
+        user_uid = UUID(subject)
+        session_uid = UUID(session_id)
+
+    except (
+        JWTError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": (
+                    "Le refresh token est invalide "
+                    "ou a expiré."
+                ),
+            },
+        ) from error
+
+       
     if not session_id:
-        response_data= ErrorLoginResponse(
+        response_data = TokenResponse(
             code=status.HTTP_401_UNAUTHORIZED,
             success=False,
-            message="Invalid refresh token.",
-            remaining=0
+            access=None,
+            refresh=None,
+            token_type="bearer",
+            expires_in=0,
         )
         return response_data
-        encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        return encrypt_data_auth
-
-
-    session = await validate_refresh_session(db, session_id=session_id, refresh_token=refresh_token)
         
-    if session is None or session.user_uid != user_id:
-        response_data= ErrorLoginResponse(
+    session = await validate_refresh_session(db, session_id=session_uid, refresh_token=refresh_token)
+        
+    if session is None or session.user_uid != user_uid:
+        response_data = TokenResponse(
             code=status.HTTP_401_UNAUTHORIZED,
             success=False,
-            message="Invalid refresh token.",
-            remaining=0
+            access=None,
+            refresh=None,
+            token_type="bearer",
+            expires_in=0,
         )
         return response_data
-        encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        return encrypt_data_auth
-
-    user = await get_user_by_id(db, user_id)
+        
+    user = await get_user_by_id(db, user_uid)
     if not user or not user.is_active:
-        response_data= ErrorLoginResponse(
+        response_data = TokenResponse(
             code=status.HTTP_401_UNAUTHORIZED,
             success=False,
-            message="User not found or inactive.",
-            remaining=0
+            access=None,
+            refresh=None,
+            token_type="bearer",
+            expires_in=0,
         )
         return response_data
-        encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-        return encrypt_data_auth
-
+        
     new_session_id = generate_session_id()
-    new_refresh_token = create_refresh_token(
-        data={"sub": str(user.uid), "sid": new_session_id},
-        expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-    )
+    refresh_expires_at = decoded.get("exp")
+    if not isinstance(refresh_expires_at, int):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": "La date d’expiration du refresh token est invalide.",
+            },
+        )
+
+    try:
+        new_refresh_token = create_refresh_token(
+            data={
+                "sub": str(user.uid),
+                "sid": new_session_id,
+            },
+            expires_at=refresh_expires_at,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": "Le refresh token a expiré.",
+            },
+        ) from error
+
     await rotate_refresh_session(
         db=db,
         current_session=session,
@@ -457,7 +474,12 @@ async def refresh_tokens(
         new_refresh_token=new_refresh_token,
     )
 
-    new_access_token = create_access_token(data={"sub": str(user.uid)})
+    new_access_token = create_access_token(
+        data={
+            "sub": str(user.uid),
+            "sid": new_session_id,
+        }
+    )
     response_data = TokenResponse(
         code=status.HTTP_201_CREATED,
         success=True,
@@ -468,56 +490,180 @@ async def refresh_tokens(
     )
     return response_data
 
-    encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-    return encrypt_data_auth
+  
+  
+@auth_router.post(
+    "/deconnexion",
+    response_model=MessageResponse,
+    dependencies=[Depends(verify_env_csrf_token)],
+)
+async def logout(
+    payload: str | None = Depends(oauth2_scheme),
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_session),
+) -> MessageResponse:
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token d'accès manquant.",
+        )
+
+    access_token = payload.removeprefix("Bearer ").strip()
+
+    try:
+        decoded = decode_access_token(access_token)
+        sub = decoded.get("sub")
+        session_id = decoded.get("sid")
+        token_type = decoded.get("type")
+
+        if token_type != "access" or not sub or not session_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token invalide.",
+            )
+
+        user_id = UUID(sub)
+        session_uid = UUID(session_id)
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expiré.",
+        )
+
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide.",
+        )
+
+    if user_id != current_user.user.uid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Utilisateur non autorisé.",
+        )
+
+    await revoke_auth_session(db, session_uid)
+    await revoke_all_auth_sessions(db, session_uid)
+   
+    return MessageResponse(
+        message="Déconnexion effectuée avec succès."
+    )  
 
 
 @auth_router.post(
-    "/deconnexion", 
-    #response_model=MessageResponse
-    response_model=EncryptedResponse,
-    dependencies=[
-        Depends(verify_csrf_token),
-    ],
+    "/forcer-deconnexion",
+    response_model=MessageResponse,
+    dependencies=[Depends(verify_env_csrf_token)],
 )
-async def logout(
-    crypto_session_id: Annotated[str, Header(alias="X-Crypto-Session-ID")],
-    payload: str | None = Depends(
-        oauth2_scheme
-    ),
-    current_user=Depends(get_current_active_user),
+async def forcerlogout(
+    refresh_data: RefreshRequestData,
     db: AsyncSession = Depends(get_session),
-)->EncryptedResponse:
-    if payload:
-        try:
-            access_token = (
-                payload
-                .removeprefix("Bearer ")
-                .strip()
+) -> MessageResponse:
+    
+    refresh_token = refresh_data.refresh_token
+        
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "REFRESH_TOKEN_MISSING",
+                "message": "Le refresh token est absent.",
+            },
+        )
+        
+    try:
+        decoded = decode_refresh_token(
+            refresh_token
+        )
+
+        subject = decoded.get("sub")
+        session_id = decoded.get("sid")
+        token_type = decoded.get("type")
+
+        if not isinstance(subject, str):
+            raise ValueError(
+                "Le champ sub est invalide."
             )
-            
-            decoded = decode_access_token(access_token)
-            sub = decoded.get("sub")
-            session_id = decoded.get("sid")
-        except (JWTError, TypeError, ValueError):
-            response_data = MessageResponse(message="Logged out from all sessions")
-            encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-            return encrypt_data_auth
+
+        if not isinstance(session_id, str):
+            raise ValueError(
+                "Le champ sid est invalide."
+            )
+
+        if token_type != "refresh":
+            raise ValueError(
+                "Le token fourni n’est pas "
+                "un refresh token."
+            )
+
+        user_uid = UUID(subject)
+        session_uid = UUID(session_id)
+
+    except (
+        JWTError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": (
+                    "Le refresh token est invalide "
+                    "ou a expiré."
+                ),
+            },
+        ) from error
+
+        
+    if not session_id:
+        response_data = TokenResponse(
+            code=status.HTTP_401_UNAUTHORIZED,
+            success=False,
+            access=None,
+            refresh=None,
+            token_type="bearer",
+            expires_in=0,
+        )
+        return response_data
+
+    try:
+        
+        decoded = decode_refresh_token(refresh_token)
+        sub = decoded.get("sub")
+        session_id = decoded.get("sid")
+        token_type = decoded.get("type")
+
+        if token_type != "refresh" or not sub or not session_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token invalide.",
+            )
 
         user_id = UUID(sub)
-        if user_id != current_user["user"].uid or not session_id:
-            response_data = MessageResponse(message="Logged out from all sessions")
-            encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-            return encrypt_data_auth
+        session_uid = UUID(session_id)
 
-        await revoke_auth_session(db, session_id)
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expiré.",
+        )
 
-    await revoke_all_auth_sessions(db, current_user["user"].uid)
-    response_data = MessageResponse(message="Logged out from all sessions")
-    #return MessageResponse(message="Logged out from all sessions")
-    encrypt_data_auth=await encrypt_auth_response(response_data, crypto_session_id)
-    return encrypt_data_auth
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide.",
+        )
 
+    await revoke_auth_session(db, session_uid)
+    await revoke_all_auth_sessions(db, session_uid)
+   
+    return MessageResponse(
+        message="Déconnexion effectuée avec succès."
+    )  
+    
 
 
 @auth_router.post("/request-password-reset", response_model=MessageResponse)

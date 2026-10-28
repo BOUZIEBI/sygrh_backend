@@ -202,8 +202,8 @@ class PasswordResetConfirmModel(BaseModel):
 class TokenResponse(BaseModel, Generic[T]):
     code:int
     success:bool
-    access: str
-    refresh: str
+    access: str | None = None
+    refresh: str | None = None
     token_type: str = "bearer"
     expires_in: int
     data: T | None = None 
@@ -275,6 +275,7 @@ class AuthDependenciesResponse(BaseModel):
     message: str
     user: UserModel | None = None
     is_access_token: bool
+    duree_minutes: float | None = None
     
     
 class LoginRequestData(BaseModel):
@@ -287,5 +288,7 @@ class LoginRequestData(BaseModel):
     )
     
     
+class RefreshRequestData(BaseModel):
+    refresh_token: str | None = None
     
-
+    

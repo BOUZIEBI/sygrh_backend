@@ -5,6 +5,7 @@ from jose.exceptions import (
     JWTClaimsError,
     JWTError,
 )
+from uuid import UUID
 from jose import JWTError, jwt
 TokenType = Literal["access", "refresh"]
 from app.core.config import settings
@@ -17,8 +18,12 @@ def _create_token(
     data: dict[str, Any],
     token_type: str,
     expires_delta: timedelta,
+    expires_at: int | None = None,
 ) -> str:
     now = datetime.now(UTC)
+    if expires_at is not None and expires_at <= int(now.timestamp()):
+        raise ValueError("La date d’expiration du token est dépassée.")
+
     expire = now + expires_delta
 
     payload = data.copy()
@@ -26,7 +31,7 @@ def _create_token(
     payload.update(
         {
             "iat": now,
-            "exp": expire,
+            "exp": expires_at if expires_at is not None else expire,
             "type": token_type,
         }
     )
@@ -60,6 +65,7 @@ def create_access_token(
 def create_refresh_token(
     data: dict[str, Any],
     expires_delta: timedelta | None = None,
+    expires_at: int | None = None,
 ) -> str:
     lifetime = (
         expires_delta
@@ -73,6 +79,7 @@ def create_refresh_token(
         data=data,
         token_type="refresh",
         expires_delta=lifetime,
+        expires_at=expires_at,
     )
 
 
@@ -86,24 +93,19 @@ def _decode_token(
             "Le token doit être une chaîne de caractères."
         )
 
-    normalized_token = (
-        token
-        .removeprefix("Bearer ")
-        .strip()
-    )
+    normalized_token = token.strip()
+
+    if normalized_token.lower().startswith("bearer "):
+        normalized_token = normalized_token[7:].strip()
 
     if not normalized_token:
-        raise JWTError(
-            "Le token est absent."
-        )
+        raise JWTError("Le token est absent.")
 
     try:
-        payload: dict[str, Any] = jwt.decode(
+        payload = jwt.decode(
             normalized_token,
             settings.JWT_SECRET_KEY,
-            algorithms=[
-                settings.JWT_ALGORITHM
-            ],
+            algorithms=[settings.JWT_ALGORITHM],
             options={
                 "verify_signature": True,
                 "verify_exp": True,
@@ -115,34 +117,34 @@ def _decode_token(
             },
         )
 
-    except ExpiredSignatureError as error:
-        raise JWTError(
-            "Le token a expiré."
-        ) from error
+    except ExpiredSignatureError:
+        # Conserver ce type d'exception permet aux routes
+        # de distinguer un token expiré d'un token invalide.
+        raise
 
     except JWTClaimsError as error:
         raise JWTError(
-            "Les informations contenues dans "
-            "le token sont invalides."
+            "Les informations contenues dans le token "
+            "sont invalides."
         ) from error
 
     except JWTError as error:
         raise JWTError(
-            "Le token est invalide."
+            "Le token est invalide ou sa signature "
+            "ne peut pas être vérifiée."
         ) from error
+
+    if not isinstance(payload, dict):
+        raise JWTError(
+            "Le contenu du token est invalide."
+        )
 
     token_type = payload.get("type")
 
-    if not isinstance(token_type, str):
-        raise JWTError(
-            "Le token ne contient pas de type valide."
-        )
-
     if token_type != expected_token_type:
         raise JWTError(
-            "Type de token invalide : "
-            f"'{expected_token_type}' attendu, "
-            f"'{token_type}' reçu."
+            f"Type de token invalide : "
+            f"'{expected_token_type}' attendu."
         )
 
     subject = payload.get("sub")
@@ -156,8 +158,28 @@ def _decode_token(
             "utilisateur valide."
         )
 
-    return payload
+    # Vérifier que l'identifiant utilisateur est un UUID.
+    try:
+        UUID(subject)
+    except (ValueError, TypeError, AttributeError) as error:
+        raise JWTError(
+            "L'identifiant utilisateur du token "
+            "n'est pas un UUID valide."
+        ) from error
 
+    # Vérifier la présence et le format du SID si ton
+    # architecture impose un identifiant de session.
+    session_id = payload.get("sid")
+
+    if session_id is not None:
+        try:
+            UUID(session_id)
+        except (ValueError, TypeError, AttributeError) as error:
+            raise JWTError(
+                "L'identifiant de session est invalide."
+            ) from error
+
+    return payload
 
 
 def decode_access_token(
